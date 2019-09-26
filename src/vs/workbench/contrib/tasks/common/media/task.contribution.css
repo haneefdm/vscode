@@ -7,10 +7,7 @@
 	background-image: url('configure-light.svg');
 }
 
-.vs-dark .monaco-workbench .quick-open-task-configure {
-	background-image: url('configure-dark.svg');
-}
-
+.vs-dark .monaco-workbench .quick-open-task-configure,
 .hc-black .monaco-workbench .quick-open-task-configure {
-	background-image: url('configure-hc.svg');
+	background-image: url('configure-dark.svg');
 }

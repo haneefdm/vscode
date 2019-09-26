@@ -44,7 +44,7 @@ function log(logger: spdlog.RotatingLogger, level: LogLevel, message: string): v
 
 export class SpdLogService extends AbstractLogService implements ILogService {
 
-	_serviceBrand: undefined;
+	_serviceBrand: any;
 
 	private buffer: ILog[] = [];
 	private _loggerCreationPromise: Promise<void> | undefined = undefined;
@@ -86,46 +86,47 @@ export class SpdLogService extends AbstractLogService implements ILogService {
 		}
 	}
 
-	trace(message: string, ...args: any[]): void {
+	trace(): void {
 		if (this.getLevel() <= LogLevel.Trace) {
-			this._log(LogLevel.Trace, this.format([message, ...args]));
+			this._log(LogLevel.Trace, this.format(arguments));
 		}
 	}
 
-	debug(message: string, ...args: any[]): void {
+	debug(): void {
 		if (this.getLevel() <= LogLevel.Debug) {
-			this._log(LogLevel.Debug, this.format([message, ...args]));
+			this._log(LogLevel.Debug, this.format(arguments));
 		}
 	}
 
-	info(message: string, ...args: any[]): void {
+	info(): void {
 		if (this.getLevel() <= LogLevel.Info) {
-			this._log(LogLevel.Info, this.format([message, ...args]));
+			this._log(LogLevel.Info, this.format(arguments));
 		}
 	}
 
-	warn(message: string, ...args: any[]): void {
+	warn(): void {
 		if (this.getLevel() <= LogLevel.Warning) {
-			this._log(LogLevel.Warning, this.format([message, ...args]));
+			this._log(LogLevel.Warning, this.format(arguments));
 		}
 	}
 
-	error(message: string | Error, ...args: any[]): void {
+	error(): void {
 		if (this.getLevel() <= LogLevel.Error) {
+			const arg = arguments[0];
 
-			if (message instanceof Error) {
+			if (arg instanceof Error) {
 				const array = Array.prototype.slice.call(arguments) as any[];
-				array[0] = message.stack;
+				array[0] = arg.stack;
 				this._log(LogLevel.Error, this.format(array));
 			} else {
-				this._log(LogLevel.Error, this.format([message, ...args]));
+				this._log(LogLevel.Error, this.format(arguments));
 			}
 		}
 	}
 
-	critical(message: string | Error, ...args: any[]): void {
+	critical(): void {
 		if (this.getLevel() <= LogLevel.Critical) {
-			this._log(LogLevel.Critical, this.format([message, ...args]));
+			this._log(LogLevel.Critical, this.format(arguments));
 		}
 	}
 

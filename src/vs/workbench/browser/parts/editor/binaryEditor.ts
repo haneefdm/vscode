@@ -23,7 +23,7 @@ import { IFileService } from 'vs/platform/files/common/files';
 import { IInstantiationService } from 'vs/platform/instantiation/common/instantiation';
 
 export interface IOpenCallbacks {
-	openInternal: (input: EditorInput, options: EditorOptions | undefined) => Promise<void>;
+	openInternal: (input: EditorInput, options: EditorOptions) => Promise<void>;
 	openExternal: (uri: URI) => void;
 }
 
@@ -33,10 +33,10 @@ export interface IOpenCallbacks {
 export abstract class BaseBinaryResourceEditor extends BaseEditor {
 
 	private readonly _onMetadataChanged: Emitter<void> = this._register(new Emitter<void>());
-	readonly onMetadataChanged: Event<void> = this._onMetadataChanged.event;
+	get onMetadataChanged(): Event<void> { return this._onMetadataChanged.event; }
 
 	private readonly _onDidOpenInPlace: Emitter<void> = this._register(new Emitter<void>());
-	readonly onDidOpenInPlace: Event<void> = this._onDidOpenInPlace.event;
+	get onDidOpenInPlace(): Event<void> { return this._onDidOpenInPlace.event; }
 
 	private callbacks: IOpenCallbacks;
 	private metadata: string | undefined;
@@ -76,7 +76,7 @@ export abstract class BaseBinaryResourceEditor extends BaseEditor {
 		parent.appendChild(this.scrollbar.getDomNode());
 	}
 
-	async setInput(input: EditorInput, options: EditorOptions | undefined, token: CancellationToken): Promise<void> {
+	async setInput(input: EditorInput, options: EditorOptions, token: CancellationToken): Promise<void> {
 		await super.setInput(input, options, token);
 		const model = await input.resolve();
 
@@ -102,7 +102,7 @@ export abstract class BaseBinaryResourceEditor extends BaseEditor {
 		}, this.instantiationService);
 	}
 
-	private async handleOpenInternalCallback(input: EditorInput, options: EditorOptions | undefined): Promise<void> {
+	private async handleOpenInternalCallback(input: EditorInput, options: EditorOptions): Promise<void> {
 		await this.callbacks.openInternal(input, options);
 
 		// Signal to listeners that the binary editor has been opened in-place

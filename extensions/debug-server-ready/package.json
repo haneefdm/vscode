@@ -10,7 +10,6 @@
 	"activationEvents": [
 		"onDebugResolve"
 	],
-	"enableProposedApi": true,
 	"main": "./out/extension",
 	"scripts": {
 		"compile": "gulp compile-extension:debug-server-ready",

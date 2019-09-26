@@ -15,7 +15,7 @@ export interface IDimension {
 
 export interface ILayoutService {
 
-	_serviceBrand: undefined;
+	_serviceBrand: any;
 
 	/**
 	 * The dimensions of the container.

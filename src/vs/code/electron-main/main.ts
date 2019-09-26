@@ -3,31 +3,31 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import 'vs/platform/update/common/update.config.contribution';
+import 'vs/platform/update/node/update.config.contribution';
 import { app, dialog } from 'electron';
 import { assign } from 'vs/base/common/objects';
 import * as platform from 'vs/base/common/platform';
-import product from 'vs/platform/product/common/product';
+import product from 'vs/platform/product/node/product';
 import { parseMainProcessArgv } from 'vs/platform/environment/node/argvHelper';
 import { addArg, createWaitMarkerFile } from 'vs/platform/environment/node/argv';
 import { mkdirp } from 'vs/base/node/pfs';
 import { validatePaths } from 'vs/code/node/paths';
-import { LifecycleMainService, ILifecycleMainService } from 'vs/platform/lifecycle/electron-main/lifecycleMainService';
+import { LifecycleService, ILifecycleService } from 'vs/platform/lifecycle/electron-main/lifecycleMain';
 import { Server, serve, connect } from 'vs/base/parts/ipc/node/ipc.net';
-import { LaunchChannelClient } from 'vs/platform/launch/electron-main/launchMainService';
+import { LaunchChannelClient } from 'vs/platform/launch/electron-main/launchService';
 import { ServicesAccessor, IInstantiationService } from 'vs/platform/instantiation/common/instantiation';
 import { InstantiationService } from 'vs/platform/instantiation/common/instantiationService';
 import { ServiceCollection } from 'vs/platform/instantiation/common/serviceCollection';
 import { SyncDescriptor } from 'vs/platform/instantiation/common/descriptors';
 import { ILogService, ConsoleLogMainService, MultiplexLogService, getLogLevel } from 'vs/platform/log/common/log';
 import { StateService } from 'vs/platform/state/node/stateService';
-import { IStateService } from 'vs/platform/state/node/state';
+import { IStateService } from 'vs/platform/state/common/state';
 import { IEnvironmentService, ParsedArgs } from 'vs/platform/environment/common/environment';
-import { EnvironmentService, xdgRuntimeDir } from 'vs/platform/environment/node/environmentService';
+import { EnvironmentService } from 'vs/platform/environment/node/environmentService';
 import { IConfigurationService } from 'vs/platform/configuration/common/configuration';
 import { ConfigurationService } from 'vs/platform/configuration/node/configurationService';
-import { IRequestService } from 'vs/platform/request/common/request';
-import { RequestMainService } from 'vs/platform/request/electron-main/requestMainService';
+import { IRequestService } from 'vs/platform/request/node/request';
+import { RequestService } from 'vs/platform/request/electron-main/requestService';
 import * as fs from 'fs';
 import { CodeApplication } from 'vs/code/electron-main/app';
 import { localize } from 'vs/nls';
@@ -116,13 +116,13 @@ class CodeMain {
 			await instantiationService.invokeFunction(async accessor => {
 				const environmentService = accessor.get(IEnvironmentService);
 				const logService = accessor.get(ILogService);
-				const lifecycleMainService = accessor.get(ILifecycleMainService);
+				const lifecycleService = accessor.get(ILifecycleService);
 				const configurationService = accessor.get(IConfigurationService);
 
-				const mainIpcServer = await this.doStartup(logService, environmentService, lifecycleMainService, instantiationService, true);
+				const mainIpcServer = await this.doStartup(logService, environmentService, lifecycleService, instantiationService, true);
 
 				bufferLogService.logger = new SpdLogService('main', environmentService.logsPath, bufferLogService.getLevel());
-				once(lifecycleMainService.onWillShutdown)(() => (configurationService as ConfigurationService).dispose());
+				once(lifecycleService.onWillShutdown)(() => (configurationService as ConfigurationService).dispose());
 
 				return instantiationService.createInstance(CodeApplication, mainIpcServer, instanceEnvironment).startup();
 			});
@@ -143,9 +143,9 @@ class CodeMain {
 		services.set(ILogService, logService);
 
 		services.set(IConfigurationService, new ConfigurationService(environmentService.settingsResource));
-		services.set(ILifecycleMainService, new SyncDescriptor(LifecycleMainService));
+		services.set(ILifecycleService, new SyncDescriptor(LifecycleService));
 		services.set(IStateService, new SyncDescriptor(StateService));
-		services.set(IRequestService, new SyncDescriptor(RequestMainService));
+		services.set(IRequestService, new SyncDescriptor(RequestService));
 		services.set(IThemeMainService, new SyncDescriptor(ThemeMainService));
 		services.set(ISignService, new SyncDescriptor(SignService));
 
@@ -189,7 +189,7 @@ class CodeMain {
 		return instanceEnvironment;
 	}
 
-	private async doStartup(logService: ILogService, environmentService: IEnvironmentService, lifecycleMainService: ILifecycleMainService, instantiationService: IInstantiationService, retry: boolean): Promise<Server> {
+	private async doStartup(logService: ILogService, environmentService: IEnvironmentService, lifecycleService: ILifecycleService, instantiationService: IInstantiationService, retry: boolean): Promise<Server> {
 
 		// Try to setup a server for running. If that succeeds it means
 		// we are the first instance to startup. Otherwise it is likely
@@ -197,7 +197,7 @@ class CodeMain {
 		let server: Server;
 		try {
 			server = await serve(environmentService.mainIPCHandle);
-			once(lifecycleMainService.onWillShutdown)(() => server.dispose());
+			once(lifecycleService.onWillShutdown)(() => server.dispose());
 		} catch (error) {
 
 			// Handle unexpected errors (the only expected error is EADDRINUSE that
@@ -245,7 +245,7 @@ class CodeMain {
 					throw error;
 				}
 
-				return this.doStartup(logService, environmentService, lifecycleMainService, instantiationService, false);
+				return this.doStartup(logService, environmentService, lifecycleService, instantiationService, false);
 			}
 
 			// Tests from CLI require to be the only instance currently
@@ -330,19 +330,9 @@ class CodeMain {
 
 	private handleStartupDataDirError(environmentService: IEnvironmentService, error: NodeJS.ErrnoException): void {
 		if (error.code === 'EACCES' || error.code === 'EPERM') {
-			const directories = [environmentService.userDataPath];
-
-			if (environmentService.extensionsPath) {
-				directories.push(environmentService.extensionsPath);
-			}
-
-			if (xdgRuntimeDir) {
-				directories.push(xdgRuntimeDir);
-			}
-
 			this.showStartupWarningDialog(
 				localize('startupDataDirError', "Unable to write program user data."),
-				localize('startupUserDataAndExtensionsDirErrorDetail', "Please make sure the following directories are writeable:\n\n{0}", directories.join('\n'))
+				localize('startupDataDirErrorDetail', "Please make sure the directories {0} and {1} are writeable.", environmentService.userDataPath, environmentService.extensionsPath)
 			);
 		}
 	}
@@ -374,7 +364,7 @@ class CodeMain {
 
 	private quit(accessor: ServicesAccessor, reason?: ExpectedError | Error): void {
 		const logService = accessor.get(ILogService);
-		const lifecycleMainService = accessor.get(ILifecycleMainService);
+		const lifecycleService = accessor.get(ILifecycleService);
 
 		let exitCode = 0;
 
@@ -394,7 +384,7 @@ class CodeMain {
 			}
 		}
 
-		lifecycleMainService.kill(exitCode);
+		lifecycleService.kill(exitCode);
 	}
 }
 

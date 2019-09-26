@@ -17,7 +17,7 @@
 var _nlsPluginGlobal = this;
 var NLSBuildLoaderPlugin;
 (function (NLSBuildLoaderPlugin) {
-    var global = (_nlsPluginGlobal || {});
+    var global = _nlsPluginGlobal || {};
     var Resources = global.Plugin && global.Plugin.Resources ? global.Plugin.Resources : undefined;
     var IS_PSEUDO = (global && global.document && global.document.location && global.document.location.hash.indexOf('pseudo=true') >= 0);
     function _format(message, args) {
@@ -79,7 +79,7 @@ var NLSBuildLoaderPlugin;
                 });
             }
             else {
-                var suffix = void 0;
+                var suffix = undefined;
                 if (Resources && Resources.getString) {
                     suffix = '.nls.keys';
                     req([name + suffix], function (keyMap) {

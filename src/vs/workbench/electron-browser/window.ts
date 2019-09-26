@@ -14,17 +14,17 @@ import { IFileService } from 'vs/platform/files/common/files';
 import { toResource, IUntitledResourceInput, SideBySideEditor, pathsToEditors } from 'vs/workbench/common/editor';
 import { IEditorService, IResourceEditor } from 'vs/workbench/services/editor/common/editorService';
 import { ITelemetryService } from 'vs/platform/telemetry/common/telemetry';
-import { IWindowSettings, IOpenFileRequest, IWindowsConfiguration, IAddFoldersRequest, IRunActionInWindowRequest, IRunKeybindingInWindowRequest, getTitleBarStyle } from 'vs/platform/windows/common/windows';
+import { IWindowsService, IWindowService, IWindowSettings, IOpenFileRequest, IWindowsConfiguration, IAddFoldersRequest, IRunActionInWindowRequest, IRunKeybindingInWindowRequest } from 'vs/platform/windows/common/windows';
 import { IContextMenuService } from 'vs/platform/contextview/browser/contextView';
 import { ITitleService } from 'vs/workbench/services/title/common/titleService';
 import { IWorkbenchThemeService, VS_HC_THEME } from 'vs/workbench/services/themes/common/workbenchThemeService';
 import * as browser from 'vs/base/browser/browser';
-import { ICommandService, CommandsRegistry } from 'vs/platform/commands/common/commands';
+import { ICommandService } from 'vs/platform/commands/common/commands';
 import { IResourceInput } from 'vs/platform/editor/common/editor';
 import { KeyboardMapperFactory } from 'vs/workbench/services/keybinding/electron-browser/nativeKeymapService';
 import { ipcRenderer as ipc, webFrame, crashReporter, Event } from 'electron';
 import { IWorkspaceEditingService } from 'vs/workbench/services/workspace/common/workspaceEditing';
-import { IMenuService, MenuId, IMenu, MenuItemAction, ICommandAction, SubmenuItemAction, MenuRegistry } from 'vs/platform/actions/common/actions';
+import { IMenuService, MenuId, IMenu, MenuItemAction, ICommandAction } from 'vs/platform/actions/common/actions';
 import { IContextKeyService } from 'vs/platform/contextkey/common/contextkey';
 import { createAndFillInActionBarActions } from 'vs/platform/actions/browser/menuEntryActionViewItem';
 import { RunOnceScheduler } from 'vs/base/common/async';
@@ -33,7 +33,8 @@ import { LifecyclePhase, ILifecycleService } from 'vs/platform/lifecycle/common/
 import { IWorkspaceFolderCreationData } from 'vs/platform/workspaces/common/workspaces';
 import { IIntegrityService } from 'vs/workbench/services/integrity/common/integrity';
 import { isRootUser, isWindows, isMacintosh, isLinux } from 'vs/base/common/platform';
-import product from 'vs/platform/product/common/product';
+import product from 'vs/platform/product/node/product';
+import pkg from 'vs/platform/product/node/package';
 import { INotificationService } from 'vs/platform/notification/common/notification';
 import { EditorServiceImpl } from 'vs/workbench/browser/parts/editor/editor';
 import { IKeybindingService } from 'vs/platform/keybinding/common/keybinding';
@@ -44,24 +45,6 @@ import { coalesce } from 'vs/base/common/arrays';
 import { IConfigurationService } from 'vs/platform/configuration/common/configuration';
 import { ITextFileService } from 'vs/workbench/services/textfile/common/textfiles';
 import { isEqual } from 'vs/base/common/resources';
-import { IInstantiationService } from 'vs/platform/instantiation/common/instantiation';
-import { MenubarControl } from '../browser/parts/titlebar/menubarControl';
-import { ILabelService } from 'vs/platform/label/common/label';
-import { IUpdateService } from 'vs/platform/update/common/update';
-import { IStorageService } from 'vs/platform/storage/common/storage';
-import { IPreferencesService } from '../services/preferences/common/preferences';
-import { IMenubarService, IMenubarData, IMenubarMenu, IMenubarKeybinding, IMenubarMenuItemSubmenu, IMenubarMenuItemAction, MenubarMenuItem } from 'vs/platform/menubar/node/menubar';
-import { withNullAsUndefined } from 'vs/base/common/types';
-import { IOpenerService, OpenOptions } from 'vs/platform/opener/common/opener';
-import { Schemas } from 'vs/base/common/network';
-import { IElectronService } from 'vs/platform/electron/node/electron';
-import { posix, dirname } from 'vs/base/common/path';
-import { getBaseLabel } from 'vs/base/common/labels';
-import { ITunnelService, extractLocalHostUriMetaDataForPortMapping } from 'vs/platform/remote/common/tunnel';
-import { IWorkbenchLayoutService, Parts } from 'vs/workbench/services/layout/browser/layoutService';
-import { IHostService } from 'vs/workbench/services/host/browser/host';
-import { IElectronEnvironmentService } from 'vs/workbench/services/electron/electron-browser/electronEnvironmentService';
-import { IWorkspacesHistoryService } from 'vs/workbench/services/workspace/common/workspacesHistoryService';
 
 const TextInputActions: IAction[] = [
 	new Action('undo', nls.localize('undo', "Undo"), undefined, true, () => Promise.resolve(document.execCommand('undo'))),
@@ -76,13 +59,12 @@ const TextInputActions: IAction[] = [
 
 export class ElectronWindow extends Disposable {
 
-	private touchBarMenu: IMenu | undefined;
+	private touchBarMenu?: IMenu;
+	private touchBarUpdater: RunOnceScheduler;
 	private readonly touchBarDisposables = this._register(new DisposableStore());
-	private lastInstalledTouchedBar: ICommandAction[][] | undefined;
+	private lastInstalledTouchedBar: ICommandAction[][];
 
-	private customTitleContextMenuDisposable = this._register(new DisposableStore());
-
-	private previousConfiguredZoomLevel: number | undefined;
+	private previousConfiguredZoomLevel: number;
 
 	private addFoldersScheduler: RunOnceScheduler;
 	private pendingFoldersToAdd: URI[];
@@ -91,6 +73,8 @@ export class ElectronWindow extends Disposable {
 
 	constructor(
 		@IEditorService private readonly editorService: EditorServiceImpl,
+		@IWindowsService private readonly windowsService: IWindowsService,
+		@IWindowService private readonly windowService: IWindowService,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
 		@ITitleService private readonly titleService: ITitleService,
 		@IWorkbenchThemeService protected themeService: IWorkbenchThemeService,
@@ -107,13 +91,7 @@ export class ElectronWindow extends Disposable {
 		@IWorkbenchEnvironmentService private readonly environmentService: IWorkbenchEnvironmentService,
 		@IAccessibilityService private readonly accessibilityService: IAccessibilityService,
 		@IWorkspaceContextService private readonly contextService: IWorkspaceContextService,
-		@ITextFileService private readonly textFileService: ITextFileService,
-		@IInstantiationService private readonly instantiationService: IInstantiationService,
-		@IOpenerService private readonly openerService: IOpenerService,
-		@IElectronService private readonly electronService: IElectronService,
-		@ITunnelService private readonly tunnelService: ITunnelService,
-		@IWorkbenchLayoutService private readonly layoutService: IWorkbenchLayoutService,
-		@IElectronEnvironmentService private readonly electronEnvironmentService: IElectronEnvironmentService
+		@ITextFileService private readonly textFileService: ITextFileService
 	) {
 		super();
 
@@ -157,11 +135,13 @@ export class ElectronWindow extends Disposable {
 			try {
 				await this.commandService.executeCommand(request.id, ...args);
 
-				type CommandExecutedClassifcation = {
-					id: { classification: 'SystemMetaData', purpose: 'FeatureInsight' };
-					from: { classification: 'SystemMetaData', purpose: 'FeatureInsight' };
-				};
-				this.telemetryService.publicLog2<{ id: String, from: String }, CommandExecutedClassifcation>('commandExecuted', { id: request.id, from: request.from });
+				/* __GDPR__
+					"commandExecuted" : {
+						"id" : { "classification": "SystemMetaData", "purpose": "FeatureInsight" },
+						"from": { "classification": "SystemMetaData", "purpose": "FeatureInsight" }
+					}
+				*/
+				this.telemetryService.publicLog('commandExecuted', { id: request.id, from: request.from });
 			} catch (error) {
 				this.notificationService.error(error);
 			}
@@ -235,8 +215,6 @@ export class ElectronWindow extends Disposable {
 		this._register(this.configurationService.onDidChangeConfiguration(e => {
 			if (e.affectsConfiguration('window.zoomLevel')) {
 				this.updateWindowZoomLevel();
-			} else if (e.affectsConfiguration('keyboard.touchbar.enabled') || e.affectsConfiguration('keyboard.touchbar.ignored')) {
-				this.updateTouchbarMenu();
 			}
 		}));
 
@@ -253,30 +231,6 @@ export class ElectronWindow extends Disposable {
 			const resourcesToWaitFor = coalesce(filesToWait.paths.map(p => p.fileUri));
 
 			this._register(this.trackClosedWaitFiles(waitMarkerFile, resourcesToWaitFor));
-		}
-
-		// macOS OS integration
-		if (isMacintosh) {
-			this._register(this.editorService.onDidActiveEditorChange(() => {
-				const file = toResource(this.editorService.activeEditor, { supportSideBySide: SideBySideEditor.MASTER, filterByScheme: Schemas.file });
-
-				// Represented Filename
-				this.updateRepresentedFilename(file ? file.fsPath : undefined);
-
-				// Custom title menu
-				this.provideCustomTitleContextMenu(file ? file.fsPath : undefined);
-			}));
-		}
-
-		// Maximize/Restore on doubleclick (for macOS custom title)
-		if (isMacintosh && getTitleBarStyle(this.configurationService, this.environmentService) === 'custom') {
-			const titlePart = this.layoutService.getContainer(Parts.TITLEBAR_PART);
-
-			this._register(DOM.addDisposableListener(titlePart, DOM.EventType.DBLCLICK, e => {
-				DOM.EventHelper.stop(e);
-
-				this.electronService.handleTitleDoubleClick();
-			}));
 		}
 	}
 
@@ -297,7 +251,7 @@ export class ElectronWindow extends Disposable {
 	private onAllEditorsClosed(): void {
 		const visibleEditors = this.editorService.visibleControls.length;
 		if (visibleEditors === 0) {
-			this.electronService.closeWindow();
+			this.windowService.closeWindow();
 		}
 	}
 
@@ -341,77 +295,41 @@ export class ElectronWindow extends Disposable {
 		}
 	}
 
-	private updateRepresentedFilename(filePath: string | undefined): void {
-		this.electronService.setRepresentedFilename(filePath ? filePath : '');
-	}
-
-	private provideCustomTitleContextMenu(filePath: string | undefined): void {
-
-		// Clear old menu
-		this.customTitleContextMenuDisposable.clear();
-
-		// Provide new menu if a file is opened and we are on a custom title
-		if (!filePath || getTitleBarStyle(this.configurationService, this.environmentService) !== 'custom') {
-			return;
-		}
-
-		// Split up filepath into segments
-		const segments = filePath.split(posix.sep);
-		for (let i = segments.length; i > 0; i--) {
-			const isFile = (i === segments.length);
-
-			let pathOffset = i;
-			if (!isFile) {
-				pathOffset++; // for segments which are not the file name we want to open the folder
-			}
-
-			const path = segments.slice(0, pathOffset).join(posix.sep);
-
-			let label: string;
-			if (!isFile) {
-				label = getBaseLabel(dirname(path));
-			} else {
-				label = getBaseLabel(path);
-			}
-
-			const commandId = `workbench.action.revealPathInFinder${i}`;
-			this.customTitleContextMenuDisposable.add(CommandsRegistry.registerCommand(commandId, () => this.electronService.showItemInFolder(path)));
-			this.customTitleContextMenuDisposable.add(MenuRegistry.appendMenuItem(MenuId.TitleBarContext, { command: { id: commandId, title: label || posix.sep }, order: -i }));
-		}
-	}
-
 	private create(): void {
 
-		// Native menu controller
-		if (isMacintosh || getTitleBarStyle(this.configurationService, this.environmentService) === 'native') {
-			this._register(this.instantiationService.createInstance(NativeMenubarControl));
-		}
+		// Handle window.open() calls
+		const $this = this;
+		window.open = function (url: string, target: string, features: string, replace: boolean): Window | null {
+			$this.windowsService.openExternal(url);
 
-		// Handle open calls
-		this.setupOpenHandlers();
+			return null;
+		};
 
 		// Emit event when vscode is ready
-		this.lifecycleService.when(LifecyclePhase.Ready).then(() => ipc.send('vscode:workbenchReady', this.electronEnvironmentService.windowId));
+		this.lifecycleService.when(LifecyclePhase.Ready).then(() => ipc.send('vscode:workbenchReady', this.windowService.windowId));
 
 		// Integrity warning
 		this.integrityService.isPure().then(res => this.titleService.updateProperties({ isPure: res.isPure }));
 
 		// Root warning
-		this.lifecycleService.when(LifecyclePhase.Restored).then(async () => {
-			let isAdmin: boolean;
+		this.lifecycleService.when(LifecyclePhase.Restored).then(() => {
+			let isAdminPromise: Promise<boolean>;
 			if (isWindows) {
-				isAdmin = (await import('native-is-elevated'))();
+				isAdminPromise = import('native-is-elevated').then(isElevated => isElevated()); // not using async here due to https://github.com/microsoft/vscode/issues/74321
 			} else {
-				isAdmin = isRootUser();
+				isAdminPromise = Promise.resolve(isRootUser());
 			}
 
-			// Update title
-			this.titleService.updateProperties({ isAdmin });
+			return isAdminPromise.then(isAdmin => {
 
-			// Show warning message (unix only)
-			if (isAdmin && !isWindows) {
-				this.notificationService.warn(nls.localize('runningAsRoot', "It is not recommended to run {0} as root user.", product.nameShort));
-			}
+				// Update title
+				this.titleService.updateProperties({ isAdmin });
+
+				// Show warning message (unix only)
+				if (isAdmin && !isWindows) {
+					this.notificationService.warn(nls.localize('runningAsRoot', "It is not recommended to run {0} as root user.", product.nameShort));
+				}
+			});
 		});
 
 		// Touchbar menu (if enabled)
@@ -419,68 +337,16 @@ export class ElectronWindow extends Disposable {
 
 		// Crash reporter (if enabled)
 		if (!this.environmentService.disableCrashReporter && product.crashReporter && product.hockeyApp && this.configurationService.getValue('telemetry.enableCrashReporter')) {
-			this.setupCrashReporter(product.crashReporter.companyName, product.crashReporter.productName, product.hockeyApp);
+			this.setupCrashReporter();
 		}
 	}
 
-	private setupOpenHandlers(): void {
-
-		// Block window.open() calls
-		window.open = function (): Window | null {
-			throw new Error('Prevented call to window.open(). Use IOpenerService instead!');
-		};
-
-		// Handle internal open() calls
-		this.openerService.registerOpener({
-			open: async (resource: URI, options?: OpenOptions): Promise<boolean> => {
-
-				// If either the caller wants to open externally or the
-				// scheme is one where we prefer to open externally
-				// we handle this resource by delegating the opening to
-				// the main process to prevent window focus issues.
-				if (this.shouldOpenExternal(resource, options)) {
-					const { resolved } = await this.openerService.resolveExternalUri(resource, options);
-					const success = await this.electronService.openExternal(encodeURI(resolved.toString(true)));
-					if (!success && resolved.scheme === Schemas.file) {
-						// if opening failed, and this is a file, we can still try to reveal it
-						await this.electronService.showItemInFolder(resolved.fsPath);
-					}
-
-					return true;
-				}
-
-				return false; // not handled by us
-			}
-		});
-
-		this.openerService.registerExternalUriResolver({
-			resolveExternalUri: async (uri: URI, options?: OpenOptions) => {
-				if (options && options.allowTunneling) {
-					const portMappingRequest = extractLocalHostUriMetaDataForPortMapping(uri);
-					if (portMappingRequest) {
-						const tunnel = await this.tunnelService.openTunnel(portMappingRequest.port);
-						if (tunnel) {
-							return {
-								resolved: uri.with({ authority: `127.0.0.1:${tunnel.tunnelLocalPort}` }),
-								dispose: () => tunnel.dispose(),
-							};
-						}
-					}
-				}
-				return undefined;
-			}
-		});
-	}
-
-	private shouldOpenExternal(resource: URI, options?: OpenOptions) {
-		const scheme = resource.scheme.toLowerCase();
-		const preferOpenExternal = (scheme === Schemas.mailto || scheme === Schemas.http || scheme === Schemas.https);
-		return (options && options.openExternal) || preferOpenExternal;
-	}
-
 	private updateTouchbarMenu(): void {
-		if (!isMacintosh) {
-			return; // macOS only
+		if (
+			!isMacintosh || // macOS only
+			!this.configurationService.getValue<boolean>('keyboard.touchbar.enabled') // disabled via setting
+		) {
+			return;
 		}
 
 		// Dispose old
@@ -488,21 +354,19 @@ export class ElectronWindow extends Disposable {
 		this.touchBarMenu = undefined;
 
 		// Create new (delayed)
-		const scheduler: RunOnceScheduler = this.touchBarDisposables.add(new RunOnceScheduler(() => this.doUpdateTouchbarMenu(scheduler), 300));
-		scheduler.schedule();
+		this.touchBarUpdater = new RunOnceScheduler(() => this.doUpdateTouchbarMenu(), 300);
+		this.touchBarDisposables.add(this.touchBarUpdater);
+		this.touchBarUpdater.schedule();
 	}
 
-	private doUpdateTouchbarMenu(scheduler: RunOnceScheduler): void {
+	private doUpdateTouchbarMenu(): void {
 		if (!this.touchBarMenu) {
 			this.touchBarMenu = this.editorService.invokeWithinEditorContext(accessor => this.menuService.createMenu(MenuId.TouchBarContext, accessor.get(IContextKeyService)));
 			this.touchBarDisposables.add(this.touchBarMenu);
-			this.touchBarDisposables.add(this.touchBarMenu.onDidChange(() => scheduler.schedule()));
+			this.touchBarDisposables.add(this.touchBarMenu.onDidChange(() => this.touchBarUpdater.schedule()));
 		}
 
 		const actions: Array<MenuItemAction | Separator> = [];
-
-		const disabled = this.configurationService.getValue<boolean>('keyboard.touchbar.enabled') === false;
-		const ignoredItems = this.configurationService.getValue<string[]>('keyboard.touchbar.ignored') || [];
 
 		// Fill actions into groups respecting order
 		this.touchBarDisposables.add(createAndFillInActionBarActions(this.touchBarMenu, undefined, actions));
@@ -510,52 +374,43 @@ export class ElectronWindow extends Disposable {
 		// Convert into command action multi array
 		const items: ICommandAction[][] = [];
 		let group: ICommandAction[] = [];
-		if (!disabled) {
-			for (const action of actions) {
+		for (const action of actions) {
 
-				// Command
-				if (action instanceof MenuItemAction) {
-					if (ignoredItems.indexOf(action.item.id) >= 0) {
-						continue; // ignored
-					}
-
-					group.push(action.item);
-				}
-
-				// Separator
-				else if (action instanceof Separator) {
-					if (group.length) {
-						items.push(group);
-					}
-
-					group = [];
-				}
+			// Command
+			if (action instanceof MenuItemAction) {
+				group.push(action.item);
 			}
 
-			if (group.length) {
-				items.push(group);
+			// Separator
+			else if (action instanceof Separator) {
+				if (group.length) {
+					items.push(group);
+				}
+
+				group = [];
 			}
+		}
+
+		if (group.length) {
+			items.push(group);
 		}
 
 		// Only update if the actions have changed
 		if (!equals(this.lastInstalledTouchedBar, items)) {
 			this.lastInstalledTouchedBar = items;
-			this.electronService.updateTouchBar(items);
+			this.windowService.updateTouchBar(items);
 		}
 	}
 
-	private async setupCrashReporter(companyName: string, productName: string, hockeyAppConfig: typeof product.hockeyApp): Promise<void> {
-		if (!hockeyAppConfig) {
-			return;
-		}
+	private async setupCrashReporter(): Promise<void> {
 
 		// base options with product info
 		const options = {
-			companyName,
-			productName,
-			submitURL: isWindows ? hockeyAppConfig[process.arch === 'ia32' ? 'win32-ia32' : 'win32-x64'] : isLinux ? hockeyAppConfig[`linux-x64`] : hockeyAppConfig.darwin,
+			companyName: product.crashReporter.companyName,
+			productName: product.crashReporter.productName,
+			submitURL: isWindows ? product.hockeyApp[`win32-${process.arch}`] : isLinux ? product.hockeyApp[`linux-${process.arch}`] : product.hockeyApp.darwin,
 			extra: {
-				vscode_version: product.version,
+				vscode_version: pkg.version,
 				vscode_commit: product.commit
 			}
 		};
@@ -568,7 +423,7 @@ export class ElectronWindow extends Disposable {
 		crashReporter.start(deepClone(options));
 
 		// start crash reporter in the main process
-		return this.electronService.startCrashReporter(options);
+		return this.windowsService.startCrashReporter(options);
 	}
 
 	private onAddFoldersRequest(request: IAddFoldersRequest): void {
@@ -675,196 +530,5 @@ export class ElectronWindow extends Disposable {
 
 		// Otherwise open all
 		return this.editorService.openEditors(resources);
-	}
-}
-
-class NativeMenubarControl extends MenubarControl {
-	constructor(
-		@IMenuService menuService: IMenuService,
-		@IWorkspacesHistoryService workspacesHistoryService: IWorkspacesHistoryService,
-		@IContextKeyService contextKeyService: IContextKeyService,
-		@IKeybindingService keybindingService: IKeybindingService,
-		@IConfigurationService configurationService: IConfigurationService,
-		@ILabelService labelService: ILabelService,
-		@IUpdateService updateService: IUpdateService,
-		@IStorageService storageService: IStorageService,
-		@INotificationService notificationService: INotificationService,
-		@IPreferencesService preferencesService: IPreferencesService,
-		@IWorkbenchEnvironmentService environmentService: IWorkbenchEnvironmentService,
-		@IAccessibilityService accessibilityService: IAccessibilityService,
-		@IMenubarService private readonly menubarService: IMenubarService,
-		@IHostService hostService: IHostService,
-		@IElectronEnvironmentService private readonly electronEnvironmentService: IElectronEnvironmentService
-	) {
-		super(
-			menuService,
-			workspacesHistoryService,
-			contextKeyService,
-			keybindingService,
-			configurationService,
-			labelService,
-			updateService,
-			storageService,
-			notificationService,
-			preferencesService,
-			environmentService,
-			accessibilityService,
-			hostService
-		);
-
-		if (isMacintosh) {
-			this.menus['Preferences'] = this._register(this.menuService.createMenu(MenuId.MenubarPreferencesMenu, this.contextKeyService));
-			this.topLevelTitles['Preferences'] = nls.localize('mPreferences', "Preferences");
-		}
-
-		for (const topLevelMenuName of Object.keys(this.topLevelTitles)) {
-			const menu = this.menus[topLevelMenuName];
-			if (menu) {
-				this._register(menu.onDidChange(() => this.updateMenubar()));
-			}
-		}
-
-		(async () => {
-			this.recentlyOpened = await this.workspacesHistoryService.getRecentlyOpened();
-
-			this.doUpdateMenubar(true);
-		})();
-
-		this.registerListeners();
-	}
-
-	protected doUpdateMenubar(firstTime: boolean): void {
-
-		// Send menus to main process to be rendered by Electron
-		const menubarData = { menus: {}, keybindings: {} };
-		if (this.getMenubarMenus(menubarData)) {
-			this.menubarService.updateMenubar(this.electronEnvironmentService.windowId, menubarData);
-		}
-	}
-
-	private getMenubarMenus(menubarData: IMenubarData): boolean {
-		if (!menubarData) {
-			return false;
-		}
-
-		menubarData.keybindings = this.getAdditionalKeybindings();
-		for (const topLevelMenuName of Object.keys(this.topLevelTitles)) {
-			const menu = this.menus[topLevelMenuName];
-			if (menu) {
-				const menubarMenu: IMenubarMenu = { items: [] };
-				this.populateMenuItems(menu, menubarMenu, menubarData.keybindings);
-				if (menubarMenu.items.length === 0) {
-					return false; // Menus are incomplete
-				}
-				menubarData.menus[topLevelMenuName] = menubarMenu;
-			}
-		}
-
-		return true;
-	}
-
-	private populateMenuItems(menu: IMenu, menuToPopulate: IMenubarMenu, keybindings: { [id: string]: IMenubarKeybinding | undefined }) {
-		let groups = menu.getActions();
-		for (let group of groups) {
-			const [, actions] = group;
-
-			actions.forEach(menuItem => {
-
-				if (menuItem instanceof SubmenuItemAction) {
-					const submenu = { items: [] };
-
-					if (!this.menus[menuItem.item.submenu]) {
-						this.menus[menuItem.item.submenu] = this.menuService.createMenu(menuItem.item.submenu, this.contextKeyService);
-						this._register(this.menus[menuItem.item.submenu]!.onDidChange(() => this.updateMenubar()));
-					}
-
-					const menuToDispose = this.menuService.createMenu(menuItem.item.submenu, this.contextKeyService);
-					this.populateMenuItems(menuToDispose, submenu, keybindings);
-
-					let menubarSubmenuItem: IMenubarMenuItemSubmenu = {
-						id: menuItem.id,
-						label: menuItem.label,
-						submenu: submenu
-					};
-
-					menuToPopulate.items.push(menubarSubmenuItem);
-					menuToDispose.dispose();
-				} else {
-					if (menuItem.id === 'workbench.action.openRecent') {
-						const actions = this.getOpenRecentActions().map(this.transformOpenRecentAction);
-						menuToPopulate.items.push(...actions);
-					}
-
-					let menubarMenuItem: IMenubarMenuItemAction = {
-						id: menuItem.id,
-						label: menuItem.label
-					};
-
-					if (menuItem.checked) {
-						menubarMenuItem.checked = true;
-					}
-
-					if (!menuItem.enabled) {
-						menubarMenuItem.enabled = false;
-					}
-
-					menubarMenuItem.label = this.calculateActionLabel(menubarMenuItem);
-					keybindings[menuItem.id] = this.getMenubarKeybinding(menuItem.id);
-					menuToPopulate.items.push(menubarMenuItem);
-				}
-			});
-
-			menuToPopulate.items.push({ id: 'vscode.menubar.separator' });
-		}
-
-		if (menuToPopulate.items.length > 0) {
-			menuToPopulate.items.pop();
-		}
-	}
-
-	private transformOpenRecentAction(action: Separator | (IAction & { uri: URI })): MenubarMenuItem {
-		if (action instanceof Separator) {
-			return { id: 'vscode.menubar.separator' };
-		}
-
-		return {
-			id: action.id,
-			uri: action.uri,
-			enabled: action.enabled,
-			label: action.label
-		};
-	}
-
-	private getAdditionalKeybindings(): { [id: string]: IMenubarKeybinding } {
-		const keybindings: { [id: string]: IMenubarKeybinding } = {};
-		if (isMacintosh) {
-			const keybinding = this.getMenubarKeybinding('workbench.action.quit');
-			if (keybinding) {
-				keybindings['workbench.action.quit'] = keybinding;
-			}
-		}
-
-		return keybindings;
-	}
-
-	private getMenubarKeybinding(id: string): IMenubarKeybinding | undefined {
-		const binding = this.keybindingService.lookupKeybinding(id);
-		if (!binding) {
-			return undefined;
-		}
-
-		// first try to resolve a native accelerator
-		const electronAccelerator = binding.getElectronAccelerator();
-		if (electronAccelerator) {
-			return { label: electronAccelerator, userSettingsLabel: withNullAsUndefined(binding.getUserSettingsLabel()) };
-		}
-
-		// we need this fallback to support keybindings that cannot show in electron menus (e.g. chords)
-		const acceleratorLabel = binding.getLabel();
-		if (acceleratorLabel) {
-			return { label: acceleratorLabel, isNative: false, userSettingsLabel: withNullAsUndefined(binding.getUserSettingsLabel()) };
-		}
-
-		return undefined;
 	}
 }

@@ -8,7 +8,7 @@ import { Disposable, IDisposable } from 'vs/base/common/lifecycle';
 
 export class TestNotificationService implements INotificationService {
 
-	_serviceBrand: undefined;
+	_serviceBrand: any;
 
 	private static readonly NO_OP: INotificationHandle = new NoOpNotification();
 

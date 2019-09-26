@@ -23,12 +23,11 @@ class ForceRetokenizeAction extends EditorAction {
 			return;
 		}
 		const model = editor.getModel();
-		model.resetTokenization();
+		model.flushTokens();
 		const sw = new StopWatch(true);
 		model.forceTokenization(model.getLineCount());
 		sw.stop();
 		console.log(`tokenization took ${sw.elapsed()}`);
-
 	}
 }
 

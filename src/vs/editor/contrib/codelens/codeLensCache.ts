@@ -9,15 +9,14 @@ import { registerSingleton } from 'vs/platform/instantiation/common/extensions';
 import { CodeLensModel } from 'vs/editor/contrib/codelens/codelens';
 import { LRUCache, values } from 'vs/base/common/map';
 import { CodeLensProvider, CodeLensList, CodeLens } from 'vs/editor/common/modes';
-import { IStorageService, StorageScope, WillSaveStateReason } from 'vs/platform/storage/common/storage';
+import { IStorageService, StorageScope } from 'vs/platform/storage/common/storage';
 import { Range } from 'vs/editor/common/core/range';
 import { runWhenIdle } from 'vs/base/common/async';
-import { once } from 'vs/base/common/functional';
 
 export const ICodeLensCache = createDecorator<ICodeLensCache>('ICodeLensCache');
 
 export interface ICodeLensCache {
-	_serviceBrand: undefined;
+	_serviceBrand: any;
 	put(model: ITextModel, data: CodeLensModel): void;
 	get(model: ITextModel): CodeLensModel | undefined;
 	delete(model: ITextModel): void;
@@ -38,7 +37,7 @@ class CacheItem {
 
 export class CodeLensCache implements ICodeLensCache {
 
-	_serviceBrand: undefined;
+	_serviceBrand: any;
 
 	private readonly _fakeProvider = new class implements CodeLensProvider {
 		provideCodeLenses(): CodeLensList {
@@ -60,10 +59,9 @@ export class CodeLensCache implements ICodeLensCache {
 		this._deserialize(raw);
 
 		// store lens data on shutdown
-		once(storageService.onWillSaveState)(e => {
-			if (e.reason === WillSaveStateReason.SHUTDOWN) {
-				storageService.store(key, this._serialize(), StorageScope.WORKSPACE);
-			}
+		const listener = storageService.onWillSaveState(() => {
+			storageService.store(key, this._serialize(), StorageScope.WORKSPACE);
+			listener.dispose();
 		});
 	}
 

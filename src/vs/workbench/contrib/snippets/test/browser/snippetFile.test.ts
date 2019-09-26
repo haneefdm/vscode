@@ -65,19 +65,4 @@ suite('Snippets', function () {
 
 	});
 
-	test('Snippet#needsClipboard', function () {
-
-		function assertNeedsClipboard(body: string, expected: boolean): void {
-			let snippet = new Snippet(['foo'], 'FooSnippet1', 'foo', '', body, 'test', SnippetSource.User);
-			assert.equal(snippet.needsClipboard, expected);
-		}
-
-		assertNeedsClipboard('foo$CLIPBOARD', true);
-		assertNeedsClipboard('${CLIPBOARD}', true);
-		assertNeedsClipboard('foo${CLIPBOARD}bar', true);
-		assertNeedsClipboard('foo$clipboard', false);
-		assertNeedsClipboard('foo${clipboard}', false);
-		assertNeedsClipboard('baba', false);
-	});
-
 });

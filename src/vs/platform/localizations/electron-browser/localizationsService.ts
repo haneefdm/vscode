@@ -7,10 +7,11 @@ import { IChannel } from 'vs/base/parts/ipc/common/ipc';
 import { Event } from 'vs/base/common/event';
 import { ILocalizationsService, LanguageType } from 'vs/platform/localizations/common/localizations';
 import { ISharedProcessService } from 'vs/platform/ipc/electron-browser/sharedProcessService';
+import { ServiceIdentifier } from 'vs/platform/instantiation/common/instantiation';
 
 export class LocalizationsService implements ILocalizationsService {
 
-	_serviceBrand: undefined;
+	_serviceBrand: ServiceIdentifier<any>;
 
 	private channel: IChannel;
 

@@ -358,10 +358,6 @@
 		"diffEditor.removedTextBackground": "#892F4688",
 		// "diffEditor.removedTextBorder": "",
 
-
-		// Editor: Minimap
-		"minimap.selectionHighlight": "#750000",
-
 		// Workbench: Title
 		"titleBar.activeBackground": "#10192c",
 		// "titleBar.activeForeground": "",

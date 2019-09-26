@@ -105,7 +105,7 @@ export class VSBuffer {
 	}
 }
 
-export function readUInt32BE(source: Uint8Array, offset: number): number {
+function readUInt32BE(source: Uint8Array, offset: number): number {
 	return (
 		source[offset] * 2 ** 24
 		+ source[offset + 1] * 2 ** 16
@@ -114,7 +114,7 @@ export function readUInt32BE(source: Uint8Array, offset: number): number {
 	);
 }
 
-export function writeUInt32BE(destination: Uint8Array, value: number, offset: number): void {
+function writeUInt32BE(destination: Uint8Array, value: number, offset: number): void {
 	destination[offset + 3] = value;
 	value = value >>> 8;
 	destination[offset + 2] = value;
@@ -141,13 +141,18 @@ export interface VSBufferReadable {
 	read(): VSBuffer | null;
 }
 
-export interface ReadableStream<T> {
+/**
+ * A buffer readable stream emits data to listeners. The stream
+ * will only start emitting when the first data listener has
+ * been added or the resume() method has been called.
+ */
+export interface VSBufferReadableStream {
 
 	/**
 	 * The 'data' event is emitted whenever the stream is
 	 * relinquishing ownership of a chunk of data to a consumer.
 	 */
-	on(event: 'data', callback: (chunk: T) => void): void;
+	on(event: 'data', callback: (chunk: VSBuffer) => void): void;
 
 	/**
 	 * Emitted when any error occurs.
@@ -164,32 +169,17 @@ export interface ReadableStream<T> {
 	/**
 	 * Stops emitting any events until resume() is called.
 	 */
-	pause?(): void;
+	pause(): void;
 
 	/**
 	 * Starts emitting events again after pause() was called.
 	 */
-	resume?(): void;
+	resume(): void;
 
 	/**
 	 * Destroys the stream and stops emitting any event.
 	 */
-	destroy?(): void;
-}
-
-/**
- * A readable stream that sends data via VSBuffer.
- */
-export interface VSBufferReadableStream extends ReadableStream<VSBuffer> {
-	pause(): void;
-	resume(): void;
 	destroy(): void;
-}
-
-export function isVSBufferReadableStream(obj: any): obj is VSBufferReadableStream {
-	const candidate: VSBufferReadableStream = obj;
-
-	return candidate && [candidate.on, candidate.pause, candidate.resume, candidate.destroy].every(fn => typeof fn === 'function');
 }
 
 /**
@@ -247,19 +237,6 @@ export function bufferToStream(buffer: VSBuffer): VSBufferReadableStream {
 	stream.end(buffer);
 
 	return stream;
-}
-
-/**
- * Helper to create a VSBufferStream from a Uint8Array stream.
- */
-export function toVSBufferReadableStream(stream: ReadableStream<Uint8Array | string>): VSBufferReadableStream {
-	const vsbufferStream = writeableBufferStream();
-
-	stream.on('data', data => vsbufferStream.write(typeof data === 'string' ? VSBuffer.fromString(data) : VSBuffer.wrap(data)));
-	stream.on('end', () => vsbufferStream.end());
-	stream.on('error', error => vsbufferStream.error(error));
-
-	return vsbufferStream;
 }
 
 /**

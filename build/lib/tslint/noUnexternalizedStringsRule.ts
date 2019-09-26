@@ -11,9 +11,6 @@ import * as Lint from 'tslint';
  */
 export class Rule extends Lint.Rules.AbstractRule {
 	public apply(sourceFile: ts.SourceFile): Lint.RuleFailure[] {
-		if (/\.d.ts$/.test(sourceFile.fileName)) {
-			return [];
-		}
 		return this.applyWithWalker(new NoUnexternalizedStringsRuleWalker(sourceFile, this.getOptions()));
 	}
 }

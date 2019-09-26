@@ -18,22 +18,6 @@ export interface Iterator<T> {
 	next(): IteratorResult<T>;
 }
 
-interface NativeIteratorYieldResult<TYield> {
-	done?: false;
-	value: TYield;
-}
-
-interface NativeIteratorReturnResult<TReturn> {
-	done: true;
-	value: TReturn;
-}
-
-type NativeIteratorResult<T, TReturn = any> = NativeIteratorYieldResult<T> | NativeIteratorReturnResult<TReturn>;
-
-export interface NativeIterator<T> {
-	next(): NativeIteratorResult<T>;
-}
-
 export module Iterator {
 	const _empty: Iterator<any> = {
 		next() {
@@ -45,21 +29,6 @@ export module Iterator {
 		return _empty;
 	}
 
-	export function single<T>(value: T): Iterator<T> {
-		let done = false;
-
-		return {
-			next(): IteratorResult<T> {
-				if (done) {
-					return FIN;
-				}
-
-				done = true;
-				return { done: false, value };
-			}
-		};
-	}
-
 	export function fromArray<T>(array: T[], index = 0, length = array.length): Iterator<T> {
 		return {
 			next(): IteratorResult<T> {
@@ -68,20 +37,6 @@ export module Iterator {
 				}
 
 				return { done: false, value: array[index++] };
-			}
-		};
-	}
-
-	export function fromNativeIterator<T>(it: NativeIterator<T>): Iterator<T> {
-		return {
-			next(): IteratorResult<T> {
-				const result = it.next();
-
-				if (result.done) {
-					return FIN;
-				}
-
-				return { done: false, value: result.value };
 			}
 		};
 	}
@@ -131,46 +86,10 @@ export module Iterator {
 		}
 	}
 
-	export function collect<T>(iterator: Iterator<T>, atMost: number = Number.POSITIVE_INFINITY): T[] {
+	export function collect<T>(iterator: Iterator<T>): T[] {
 		const result: T[] = [];
-
-		if (atMost === 0) {
-			return result;
-		}
-
-		let i = 0;
-
-		for (let next = iterator.next(); !next.done; next = iterator.next()) {
-			result.push(next.value);
-
-			if (++i >= atMost) {
-				break;
-			}
-		}
-
+		forEach(iterator, value => result.push(value));
 		return result;
-	}
-
-	export function concat<T>(...iterators: Iterator<T>[]): Iterator<T> {
-		let i = 0;
-
-		return {
-			next() {
-				if (i >= iterators.length) {
-					return FIN;
-				}
-
-				const iterator = iterators[i];
-				const result = iterator.next();
-
-				if (result.done) {
-					i++;
-					return this.next();
-				}
-
-				return result;
-			}
-		};
 	}
 }
 
@@ -190,12 +109,12 @@ export interface INextIterator<T> {
 
 export class ArrayIterator<T> implements INextIterator<T> {
 
-	private readonly items: readonly T[];
+	private items: T[];
 	protected start: number;
 	protected end: number;
 	protected index: number;
 
-	constructor(items: readonly T[], start: number = 0, end: number = items.length, index = start - 1) {
+	constructor(items: T[], start: number = 0, end: number = items.length, index = start - 1) {
 		this.items = items;
 		this.start = start;
 		this.end = end;
@@ -223,7 +142,7 @@ export class ArrayIterator<T> implements INextIterator<T> {
 
 export class ArrayNavigator<T> extends ArrayIterator<T> implements INavigator<T> {
 
-	constructor(items: readonly T[], start: number = 0, end: number = items.length, index = start - 1) {
+	constructor(items: T[], start: number = 0, end: number = items.length, index = start - 1) {
 		super(items, start, end, index);
 	}
 

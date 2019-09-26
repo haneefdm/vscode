@@ -5,7 +5,9 @@
 
 import * as vscode from 'vscode';
 import { ITypeScriptServiceClient } from '../typescriptService';
+import API from '../utils/api';
 import * as typeConverters from '../utils/typeConverters';
+
 
 class TypeScriptReferenceSupport implements vscode.ReferenceProvider {
 	public constructor(
@@ -29,8 +31,9 @@ class TypeScriptReferenceSupport implements vscode.ReferenceProvider {
 		}
 
 		const result: vscode.Location[] = [];
+		const has203Features = this.client.apiVersion.gte(API.v203);
 		for (const ref of response.body.refs) {
-			if (!options.includeDeclaration && ref.isDefinition) {
+			if (!options.includeDeclaration && has203Features && ref.isDefinition) {
 				continue;
 			}
 			const url = this.client.toResource(ref.file);

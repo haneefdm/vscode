@@ -4,28 +4,29 @@
  *--------------------------------------------------------------------------------------------*/
 import * as assert from 'assert';
 import { formatOptions, Option, addArg } from 'vs/platform/environment/node/argv';
+import { ParsedArgs } from 'vs/platform/environment/common/environment';
 
 suite('formatOptions', () => {
 
-	function o(description: string): Option<any> {
+	function o(id: keyof ParsedArgs, description: string): Option {
 		return {
-			description, type: 'string'
+			id, description, type: 'string'
 		};
 	}
 
 	test('Text should display small columns correctly', () => {
 		assert.deepEqual(
-			formatOptions({
-				'add': o('bar')
-			}, 80),
+			formatOptions([
+				o('add', 'bar')
+			], 80),
 			['  --add bar']
 		);
 		assert.deepEqual(
-			formatOptions({
-				'add': o('bar'),
-				'wait': o('ba'),
-				'trace': o('b')
-			}, 80),
+			formatOptions([
+				o('add', 'bar'),
+				o('wait', 'ba'),
+				o('trace', 'b')
+			], 80),
 			[
 				'  --add   bar',
 				'  --wait  ba',
@@ -35,9 +36,9 @@ suite('formatOptions', () => {
 
 	test('Text should wrap', () => {
 		assert.deepEqual(
-			formatOptions({
-				'add': o((<any>'bar ').repeat(9))
-			}, 40),
+			formatOptions([
+				o('add', (<any>'bar ').repeat(9))
+			], 40),
 			[
 				'  --add bar bar bar bar bar bar bar bar',
 				'        bar'
@@ -46,9 +47,9 @@ suite('formatOptions', () => {
 
 	test('Text should revert to the condensed view when the terminal is too narrow', () => {
 		assert.deepEqual(
-			formatOptions({
-				'add': o((<any>'bar ').repeat(9))
-			}, 30),
+			formatOptions([
+				o('add', (<any>'bar ').repeat(9))
+			], 30),
 			[
 				'  --add',
 				'      bar bar bar bar bar bar bar bar bar '

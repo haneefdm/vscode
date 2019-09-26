@@ -5,25 +5,19 @@
 
 import { IAccessibilityService, AccessibilitySupport } from 'vs/platform/accessibility/common/accessibility';
 import { isWindows } from 'vs/base/common/platform';
+import { Emitter, Event } from 'vs/base/common/event';
 import { IWorkbenchEnvironmentService } from 'vs/workbench/services/environment/common/environmentService';
-import { IContextKeyService } from 'vs/platform/contextkey/common/contextkey';
-import { IConfigurationService } from 'vs/platform/configuration/common/configuration';
-import { AbstractAccessibilityService } from 'vs/platform/accessibility/common/abstractAccessibilityService';
-import { registerSingleton } from 'vs/platform/instantiation/common/extensions';
 
-export class AccessibilityService extends AbstractAccessibilityService implements IAccessibilityService {
-
-	_serviceBrand: undefined;
+export class AccessibilityService implements IAccessibilityService {
+	_serviceBrand: any;
 
 	private _accessibilitySupport = AccessibilitySupport.Unknown;
+	private readonly _onDidChangeAccessibilitySupport = new Emitter<void>();
+	readonly onDidChangeAccessibilitySupport: Event<void> = this._onDidChangeAccessibilitySupport.event;
 
 	constructor(
-		@IWorkbenchEnvironmentService private readonly environmentService: IWorkbenchEnvironmentService,
-		@IContextKeyService readonly contextKeyService: IContextKeyService,
-		@IConfigurationService readonly configurationService: IConfigurationService
-	) {
-		super(contextKeyService, configurationService);
-	}
+		@IWorkbenchEnvironmentService private readonly environmentService: IWorkbenchEnvironmentService
+	) { }
 
 	alwaysUnderlineAccessKeys(): Promise<boolean> {
 		if (!isWindows) {
@@ -62,5 +56,3 @@ export class AccessibilityService extends AbstractAccessibilityService implement
 		return this._accessibilitySupport;
 	}
 }
-
-registerSingleton(IAccessibilityService, AccessibilityService, true);

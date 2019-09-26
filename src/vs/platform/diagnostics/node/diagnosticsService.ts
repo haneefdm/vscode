@@ -4,31 +4,20 @@
  *--------------------------------------------------------------------------------------------*/
 import * as osLib from 'os';
 import { virtualMachineHint } from 'vs/base/node/id';
-import { IMachineInfo, WorkspaceStats, WorkspaceStatItem, PerformanceInfo, SystemInfo, IRemoteDiagnosticInfo, IRemoteDiagnosticError, isRemoteDiagnosticError, IWorkspaceInformation } from 'vs/platform/diagnostics/common/diagnostics';
+import { IMachineInfo, WorkspaceStats, WorkspaceStatItem, IDiagnosticsService, PerformanceInfo, SystemInfo, IRemoteDiagnosticInfo, IRemoteDiagnosticError, isRemoteDiagnosticError } from 'vs/platform/diagnostics/common/diagnosticsService';
 import { readdir, stat, exists, readFile } from 'fs';
 import { join, basename } from 'vs/base/common/path';
 import { parse, ParseError } from 'vs/base/common/json';
 import { listProcesses } from 'vs/base/node/ps';
-import product from 'vs/platform/product/common/product';
+import product from 'vs/platform/product/node/product';
+import pkg from 'vs/platform/product/node/package';
 import { repeat, pad } from 'vs/base/common/strings';
 import { isWindows } from 'vs/base/common/platform';
 import { URI } from 'vs/base/common/uri';
 import { ProcessItem } from 'vs/base/common/processes';
-import { IMainProcessInfo } from 'vs/platform/launch/common/launch';
+import { IMainProcessInfo } from 'vs/platform/launch/common/launchService';
+import { IWorkspace } from 'vs/platform/workspace/common/workspace';
 import { ITelemetryService } from 'vs/platform/telemetry/common/telemetry';
-import { createDecorator } from 'vs/platform/instantiation/common/instantiation';
-
-export const ID = 'diagnosticsService';
-export const IDiagnosticsService = createDecorator<IDiagnosticsService>(ID);
-
-export interface IDiagnosticsService {
-	_serviceBrand: undefined;
-
-	getPerformanceInfo(mainProcessInfo: IMainProcessInfo, remoteInfo: (IRemoteDiagnosticInfo | IRemoteDiagnosticError)[]): Promise<PerformanceInfo>;
-	getSystemInfo(mainProcessInfo: IMainProcessInfo, remoteInfo: (IRemoteDiagnosticInfo | IRemoteDiagnosticError)[]): Promise<SystemInfo>;
-	getDiagnostics(mainProcessInfo: IMainProcessInfo, remoteInfo: (IRemoteDiagnosticInfo | IRemoteDiagnosticError)[]): Promise<string>;
-	reportWorkspaceStats(workspace: IWorkspaceInformation): Promise<void>;
-}
 
 export interface VersionInfo {
 	vscodeVersion: string;
@@ -75,27 +64,16 @@ export function collectWorkspaceStats(folder: string, filter: string[]): Promise
 				return done(results);
 			}
 
-			if (token.count > MAX_FILES) {
-				token.count += files.length;
-				token.maxReached = true;
-				return done(results);
-			}
-
 			let pending = files.length;
 			if (pending === 0) {
 				return done(results);
 			}
 
-			let filesToRead = files;
-			if (token.count + files.length > MAX_FILES) {
-				token.maxReached = true;
-				pending = MAX_FILES - token.count;
-				filesToRead = files.slice(0, pending);
-			}
+			for (const file of files) {
+				if (token.maxReached) {
+					return done(results);
+				}
 
-			token.count += files.length;
-
-			for (const file of filesToRead) {
 				stat(join(dir, file), (err, stats) => {
 					// Ignore files that can't be read
 					if (err) {
@@ -118,6 +96,11 @@ export function collectWorkspaceStats(folder: string, filter: string[]): Promise
 								}
 							}
 						} else {
+							if (token.count >= MAX_FILES) {
+								token.maxReached = true;
+							}
+
+							token.count++;
 							results.push(file);
 
 							if (--pending === 0) {
@@ -247,7 +230,7 @@ export function collectLaunchConfigs(folder: string): Promise<WorkspaceStatItem[
 
 export class DiagnosticsService implements IDiagnosticsService {
 
-	_serviceBrand: undefined;
+	_serviceBrand: any;
 
 	constructor(@ITelemetryService private readonly telemetryService: ITelemetryService) { }
 
@@ -266,7 +249,7 @@ export class DiagnosticsService implements IDiagnosticsService {
 		const GB = 1024 * MB;
 
 		const output: string[] = [];
-		output.push(`Version:          ${product.nameShort} ${product.version} (${product.commit || 'Commit unknown'}, ${product.date || 'Date unknown'})`);
+		output.push(`Version:          ${pkg.name} ${pkg.version} (${product.commit || 'Commit unknown'}, ${product.date || 'Date unknown'})`);
 		output.push(`OS Version:       ${osLib.type()} ${osLib.arch()} ${osLib.release()}`);
 		const cpus = osLib.cpus();
 		if (cpus && cpus.length > 0) {
@@ -531,54 +514,23 @@ export class DiagnosticsService implements IDiagnosticsService {
 		}
 	}
 
-	public async reportWorkspaceStats(workspace: IWorkspaceInformation): Promise<void> {
+	public async reportWorkspaceStats(workspace: IWorkspace): Promise<void> {
 		workspace.folders.forEach(folder => {
 			const folderUri = URI.revive(folder.uri);
 			if (folderUri.scheme === 'file') {
 				const folder = folderUri.fsPath;
 				collectWorkspaceStats(folder, ['node_modules', '.git']).then(stats => {
-					type WorkspaceStatsClassification = {
-						'workspace.id': { classification: 'SystemMetaData', purpose: 'FeatureInsight' };
-						rendererSessionId: { classification: 'SystemMetaData', purpose: 'FeatureInsight' };
-					};
-					type WorkspaceStatsEvent = {
-						'workspace.id': string | undefined;
-						rendererSessionId: string;
-					};
-					this.telemetryService.publicLog2<WorkspaceStatsEvent, WorkspaceStatsClassification>('workspace.stats', {
-						'workspace.id': workspace.telemetryId,
-						rendererSessionId: workspace.rendererSessionId
-					});
-					type WorkspaceStatsFileClassification = {
-						rendererSessionId: { classification: 'SystemMetaData', purpose: 'FeatureInsight' };
-						name: { classification: 'SystemMetaData', purpose: 'FeatureInsight', isMeasurement: true };
-						count: { classification: 'SystemMetaData', purpose: 'FeatureInsight', isMeasurement: true };
-					};
-					type WorkspaceStatsFileEvent = {
-						rendererSessionId: string;
-						name: string;
-						count: number;
-					};
-					stats.fileTypes.forEach(e => {
-						this.telemetryService.publicLog2<WorkspaceStatsFileEvent, WorkspaceStatsFileClassification>('workspace.stats.file', {
-							rendererSessionId: workspace.rendererSessionId,
-							name: e.name,
-							count: e.count
-						});
-					});
-					stats.launchConfigFiles.forEach(e => {
-						this.telemetryService.publicLog2<WorkspaceStatsFileEvent, WorkspaceStatsFileClassification>('workspace.stats.launchConfigFile', {
-							rendererSessionId: workspace.rendererSessionId,
-							name: e.name,
-							count: e.count
-						});
-					});
-					stats.configFiles.forEach(e => {
-						this.telemetryService.publicLog2<WorkspaceStatsFileEvent, WorkspaceStatsFileClassification>('workspace.stats.configFiles', {
-							rendererSessionId: workspace.rendererSessionId,
-							name: e.name,
-							count: e.count
-						});
+					/* __GDPR__
+						"workspace.stats" : {
+							"fileTypes" : { "classification": "SystemMetaData", "purpose": "FeatureInsight", "isMeasurement": true },
+							"configTypes" : { "classification": "SystemMetaData", "purpose": "FeatureInsight", "isMeasurement": true },
+							"launchConfigs" : { "classification": "SystemMetaData", "purpose": "FeatureInsight", "isMeasurement": true }
+						}
+					*/
+					this.telemetryService.publicLog('workspace.stats', {
+						fileTypes: stats.fileTypes,
+						configTypes: stats.configFiles,
+						launchConfigs: stats.launchConfigFiles
 					});
 				}).catch(_ => {
 					// Report nothing if collecting metadata fails.

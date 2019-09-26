@@ -5,7 +5,7 @@
 
 import 'vs/css!./media/panelpart';
 import { IAction } from 'vs/base/common/actions';
-import { Event, Emitter } from 'vs/base/common/event';
+import { Event } from 'vs/base/common/event';
 import { Registry } from 'vs/platform/registry/common/platform';
 import { ActionsOrientation } from 'vs/base/browser/ui/actionbar/actionbar';
 import { IPanel, ActivePanelContext, PanelFocusContext } from 'vs/workbench/common/panel';
@@ -17,7 +17,7 @@ import { IStorageService, StorageScope, IWorkspaceStorageChangeEvent } from 'vs/
 import { IContextMenuService } from 'vs/platform/contextview/browser/contextView';
 import { ITelemetryService } from 'vs/platform/telemetry/common/telemetry';
 import { IKeybindingService } from 'vs/platform/keybinding/common/keybinding';
-import { IInstantiationService } from 'vs/platform/instantiation/common/instantiation';
+import { IInstantiationService, ServiceIdentifier } from 'vs/platform/instantiation/common/instantiation';
 import { ClosePanelAction, TogglePanelPositionAction, PanelActivityAction, ToggleMaximizedPanelAction, TogglePanelAction } from 'vs/workbench/browser/parts/panel/panelActions';
 import { IThemeService, registerThemingParticipant, ITheme, ICssStyleCollector } from 'vs/platform/theme/common/themeService';
 import { PANEL_BACKGROUND, PANEL_BORDER, PANEL_ACTIVE_TITLE_FOREGROUND, PANEL_INACTIVE_TITLE_FOREGROUND, PANEL_ACTIVE_TITLE_BORDER, PANEL_DRAG_AND_DROP_BACKGROUND, PANEL_INPUT_BORDER } from 'vs/workbench/common/theme';
@@ -32,6 +32,7 @@ import { IDisposable } from 'vs/base/common/lifecycle';
 import { IContextKey, IContextKeyService } from 'vs/platform/contextkey/common/contextkey';
 import { isUndefinedOrNull, withUndefinedAsNull, withNullAsUndefined } from 'vs/base/common/types';
 import { ILifecycleService, LifecyclePhase } from 'vs/platform/lifecycle/common/lifecycle';
+import { LayoutPriority } from 'vs/base/browser/ui/grid/gridview';
 import { registerSingleton } from 'vs/platform/instantiation/common/extensions';
 
 interface ICachedPanel {
@@ -48,7 +49,7 @@ export class PanelPart extends CompositePart<Panel> implements IPanelService {
 	private static readonly PINNED_PANELS = 'workbench.panel.pinnedPanels';
 	private static readonly MIN_COMPOSITE_BAR_WIDTH = 50;
 
-	_serviceBrand: undefined;
+	_serviceBrand: ServiceIdentifier<any>;
 
 	//#region IView
 
@@ -57,25 +58,13 @@ export class PanelPart extends CompositePart<Panel> implements IPanelService {
 	readonly minimumHeight: number = 77;
 	readonly maximumHeight: number = Number.POSITIVE_INFINITY;
 
-	readonly snap = true;
-
-	get preferredHeight(): number | undefined {
-		const sidebarDimension = this.layoutService.getDimension(Parts.SIDEBAR_PART);
-		return sidebarDimension.height * 0.4;
-	}
-
-	get preferredWidth(): number | undefined {
-		const statusbarPart = this.layoutService.getDimension(Parts.STATUSBAR_PART);
-		return statusbarPart.width * 0.4;
-	}
+	readonly snapSize: number = 50;
+	readonly priority: LayoutPriority = LayoutPriority.Low;
 
 	//#endregion
 
 	get onDidPanelOpen(): Event<{ panel: IPanel, focus: boolean }> { return Event.map(this.onDidCompositeOpen.event, compositeOpen => ({ panel: compositeOpen.composite, focus: compositeOpen.focus })); }
-	readonly onDidPanelClose: Event<IPanel> = this.onDidCompositeClose.event;
-
-	private _onDidVisibilityChange = this._register(new Emitter<boolean>());
-	readonly onDidVisibilityChange: Event<boolean> = this._onDidVisibilityChange.event;
+	get onDidPanelClose(): Event<IPanel> { return this.onDidCompositeClose.event; }
 
 	private activePanelContextKey: IContextKey<string>;
 	private panelFocusContextKey: IContextKey<boolean>;
@@ -83,8 +72,8 @@ export class PanelPart extends CompositePart<Panel> implements IPanelService {
 	private compositeBar: CompositeBar;
 	private compositeActions: Map<string, { activityAction: PanelActivityAction, pinnedAction: ToggleCompositePinnedAction }> = new Map();
 
-	private blockOpeningPanel = false;
-	private _contentDimension: Dimension | undefined;
+	private blockOpeningPanel: boolean;
+	private dimension: Dimension;
 
 	constructor(
 		@INotificationService notificationService: INotificationService,
@@ -303,21 +292,21 @@ export class PanelPart extends CompositePart<Panel> implements IPanelService {
 		}
 
 		if (this.layoutService.getPanelPosition() === Position.RIGHT) {
-			this._contentDimension = new Dimension(width - 1, height!); // Take into account the 1px border when layouting
+			this.dimension = new Dimension(width - 1, height!); // Take into account the 1px border when layouting
 		} else {
-			this._contentDimension = new Dimension(width, height!);
+			this.dimension = new Dimension(width, height!);
 		}
 
 		// Layout contents
-		super.layout(this._contentDimension.width, this._contentDimension.height);
+		super.layout(this.dimension.width, this.dimension.height);
 
 		// Layout composite bar
 		this.layoutCompositeBar();
 	}
 
 	private layoutCompositeBar(): void {
-		if (this._contentDimension) {
-			let availableWidth = this._contentDimension.width - 40; // take padding into account
+		if (this.dimension) {
+			let availableWidth = this.dimension.width - 40; // take padding into account
 			if (this.toolBar) {
 				availableWidth = Math.max(PanelPart.MIN_COMPOSITE_BAR_WIDTH, availableWidth - this.getToolbarWidth()); // adjust height for global actions showing
 			}
@@ -367,7 +356,7 @@ export class PanelPart extends CompositePart<Panel> implements IPanelService {
 	private onDidStorageChange(e: IWorkspaceStorageChangeEvent): void {
 		if (e.key === PanelPart.PINNED_PANELS && e.scope === StorageScope.GLOBAL
 			&& this.cachedPanelsValue !== this.getStoredCachedPanelsValue() /* This checks if current window changed the value or not */) {
-			this._cachedPanelsValue = undefined;
+			this._cachedPanelsValue = null;
 			const newCompositeItems: ICompositeBarItem[] = [];
 			const compositeItems = this.compositeBar.getCompositeBarItems();
 			const cachedPanels = this.getCachedPanels();
@@ -422,7 +411,7 @@ export class PanelPart extends CompositePart<Panel> implements IPanelService {
 		return cachedPanels;
 	}
 
-	private _cachedPanelsValue: string | undefined;
+	private _cachedPanelsValue: string | null;
 	private get cachedPanelsValue(): string {
 		if (!this._cachedPanelsValue) {
 			this._cachedPanelsValue = this.getStoredCachedPanelsValue();
@@ -444,10 +433,6 @@ export class PanelPart extends CompositePart<Panel> implements IPanelService {
 
 	private setStoredCachedViewletsValue(value: string): void {
 		this.storageService.store(PanelPart.PINNED_PANELS, value, StorageScope.GLOBAL);
-	}
-
-	setVisible(visible: boolean): void {
-		this._onDidVisibilityChange.fire(visible);
 	}
 
 	toJSON(): object {

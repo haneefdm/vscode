@@ -16,7 +16,7 @@ export const IStorageMainService = createDecorator<IStorageMainService>('storage
 
 export interface IStorageMainService {
 
-	_serviceBrand: undefined;
+	_serviceBrand: any;
 
 	/**
 	 * Emitted whenever data is updated or deleted.
@@ -27,22 +27,8 @@ export interface IStorageMainService {
 	 * Emitted when the storage is about to persist. This is the right time
 	 * to persist data to ensure it is stored before the application shuts
 	 * down.
-	 *
-	 * Note: this event may be fired many times, not only on shutdown to prevent
-	 * loss of state in situations where the shutdown is not sufficient to
-	 * persist the data properly.
 	 */
 	readonly onWillSaveState: Event<void>;
-
-	/**
-	 * Access to all cached items of this storage service.
-	 */
-	readonly items: Map<string, string>;
-
-	/**
-	 * Required call to ensure the service can be used.
-	 */
-	initialize(): Promise<void>;
 
 	/**
 	 * Retrieve an element stored with the given key from storage. Use
@@ -85,21 +71,21 @@ export interface IStorageChangeEvent {
 
 export class StorageMainService extends Disposable implements IStorageMainService {
 
-	_serviceBrand: undefined;
+	_serviceBrand: any;
 
 	private static STORAGE_NAME = 'state.vscdb';
 
 	private readonly _onDidChangeStorage: Emitter<IStorageChangeEvent> = this._register(new Emitter<IStorageChangeEvent>());
-	readonly onDidChangeStorage: Event<IStorageChangeEvent> = this._onDidChangeStorage.event;
+	get onDidChangeStorage(): Event<IStorageChangeEvent> { return this._onDidChangeStorage.event; }
 
 	private readonly _onWillSaveState: Emitter<void> = this._register(new Emitter<void>());
-	readonly onWillSaveState: Event<void> = this._onWillSaveState.event;
+	get onWillSaveState(): Event<void> { return this._onWillSaveState.event; }
 
 	get items(): Map<string, string> { return this.storage.items; }
 
 	private storage: IStorage;
 
-	private initializePromise: Promise<void> | undefined;
+	private initializePromise: Promise<void>;
 
 	constructor(
 		@ILogService private readonly logService: ILogService,

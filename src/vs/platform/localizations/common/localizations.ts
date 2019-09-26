@@ -26,7 +26,7 @@ export const enum LanguageType {
 
 export const ILocalizationsService = createDecorator<ILocalizationsService>('localizationsService');
 export interface ILocalizationsService {
-	_serviceBrand: undefined;
+	_serviceBrand: any;
 
 	readonly onDidLanguagesChange: Event<void>;
 	getLanguageIds(type?: LanguageType): Promise<string[]>;

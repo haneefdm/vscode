@@ -11,8 +11,6 @@ import { IFileService } from 'vs/platform/files/common/files';
 import { REMOTE_HOST_SCHEME } from 'vs/platform/remote/common/remoteHosts';
 import { getWebviewContentMimeType } from 'vs/workbench/contrib/webview/common/mimeTypes';
 
-export const WebviewResourceScheme = 'vscode-resource';
-
 class Success {
 	readonly type = 'success';
 
@@ -47,10 +45,11 @@ export async function loadLocalResource(
 	extensionLocation: URI | undefined,
 	getRoots: () => ReadonlyArray<URI>
 ): Promise<LocalResourceResponse> {
-	const normalizedPath = normalizeRequestPath(requestUri);
-
+	const requestPath = requestUri.authority ? `//${requestUri.authority}${requestUri.path}` : requestUri.path;
+	const normalizedPath = URI.file(requestPath);
 	for (const root of getRoots()) {
-		if (!containsResource(root, normalizedPath)) {
+		const rootPath = root.fsPath + (endsWith(root.fsPath, sep) ? '' : sep);
+		if (!startsWith(normalizedPath.fsPath, rootPath)) {
 			continue;
 		}
 
@@ -70,24 +69,4 @@ export async function loadLocalResource(
 	}
 
 	return AccessDenied;
-}
-
-function normalizeRequestPath(requestUri: URI) {
-	if (requestUri.scheme !== WebviewResourceScheme) {
-		return requestUri;
-	}
-
-	// Modern vscode-resources uris put the scheme of the requested resource as the authority
-	if (requestUri.authority) {
-		return URI.parse(requestUri.authority + ':' + requestUri.path);
-	}
-
-	// Old style vscode-resource uris lose the scheme of the resource which means they are unable to
-	// load a mix of local and remote content properly.
-	return requestUri.with({ scheme: 'file' });
-}
-
-function containsResource(root: URI, resource: URI): boolean {
-	const rootPath = root.fsPath + (endsWith(root.fsPath, sep) ? '' : sep);
-	return startsWith(resource.fsPath, rootPath);
 }

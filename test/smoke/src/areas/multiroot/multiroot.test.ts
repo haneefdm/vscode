@@ -5,7 +5,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { Application } from '../../../../automation';
+import { Application } from '../../application';
 
 function toUri(path: string): string {
 	if (process.platform === 'win32') {
@@ -47,7 +47,8 @@ export function setup() {
 			const app = this.app as Application;
 			await app.workbench.quickopen.openQuickOpen('*.*');
 
-			await app.workbench.quickopen.waitForQuickOpenElements(names => names.length === 6);
+			// TODO roblourens: Go to files finds welcome page: issue 74875
+			await app.workbench.quickopen.waitForQuickOpenElements(names => names.length === 6 || names.length === 7);
 			await app.workbench.quickopen.closeQuickOpen();
 		});
 

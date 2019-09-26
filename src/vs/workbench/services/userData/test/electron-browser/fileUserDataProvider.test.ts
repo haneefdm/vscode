@@ -9,14 +9,14 @@ import * as path from 'vs/base/common/path';
 import * as uuid from 'vs/base/common/uuid';
 import * as pfs from 'vs/base/node/pfs';
 import { IFileService, FileChangeType, IFileChange, IFileSystemProviderWithFileReadWriteCapability, IStat, FileType, FileSystemProviderCapabilities } from 'vs/platform/files/common/files';
-import { FileService } from 'vs/platform/files/common/fileService';
+import { FileService } from 'vs/workbench/services/files/common/fileService';
 import { NullLogService } from 'vs/platform/log/common/log';
 import { Schemas } from 'vs/base/common/network';
 import { URI } from 'vs/base/common/uri';
 import { FileUserDataProvider } from 'vs/workbench/services/userData/common/fileUserDataProvider';
 import { joinPath, dirname } from 'vs/base/common/resources';
 import { VSBuffer } from 'vs/base/common/buffer';
-import { DiskFileSystemProvider } from 'vs/platform/files/electron-browser/diskFileSystemProvider';
+import { DiskFileSystemProvider } from 'vs/workbench/services/files/electron-browser/diskFileSystemProvider';
 import { BACKUPS } from 'vs/platform/environment/common/environment';
 import { DisposableStore, IDisposable, Disposable } from 'vs/base/common/lifecycle';
 import { BrowserWorkbenchEnvironmentService } from 'vs/workbench/services/environment/browser/environmentService';
@@ -47,7 +47,7 @@ suite('FileUserDataProvider', () => {
 		userDataResource = URI.file(userDataPath).with({ scheme: Schemas.userData });
 		await Promise.all([pfs.mkdirp(userDataPath), pfs.mkdirp(backupsPath)]);
 
-		const environmentService = new BrowserWorkbenchEnvironmentService({ remoteAuthority: 'remote', workspaceId: 'workspaceId', logsPath: URI.file('logFile') });
+		const environmentService = new BrowserWorkbenchEnvironmentService({ workspaceId: 'workspaceId' });
 		environmentService.userRoamingDataHome = userDataResource;
 
 		const userDataFileSystemProvider = new FileUserDataProvider(URI.file(userDataPath), URI.file(backupsPath), diskFileSystemProvider, environmentService);
@@ -230,7 +230,7 @@ suite('FileUserDataProvider', () => {
 
 	test('delete existing file under folder', async () => {
 		await pfs.mkdirp(path.join(userDataPath, 'snippets'));
-		await pfs.writeFile(path.join(userDataPath, 'snippets', 'settings.json'), '{}');
+		pfs.writeFile(path.join(userDataPath, 'snippets', 'settings.json'), '{}');
 		await testObject.del(joinPath(userDataResource, 'snippets/settings.json'));
 		const exists = await pfs.exists(path.join(userDataPath, 'snippets', 'settings.json'));
 		assert.equal(exists, false);
@@ -238,7 +238,7 @@ suite('FileUserDataProvider', () => {
 
 	test('resolve folder', async () => {
 		await pfs.mkdirp(path.join(userDataPath, 'snippets'));
-		await pfs.writeFile(path.join(userDataPath, 'snippets', 'settings.json'), '{}');
+		pfs.writeFile(path.join(userDataPath, 'snippets', 'settings.json'), '{}');
 		const result = await testObject.resolve(joinPath(userDataResource, 'snippets'));
 		assert.ok(result.isDirectory);
 		assert.ok(result.children !== undefined);
@@ -266,7 +266,7 @@ suite('FileUserDataProvider', () => {
 	});
 
 	test('resolve backups folder', async () => {
-		await pfs.writeFile(path.join(backupsPath, 'backup.json'), '{}');
+		pfs.writeFile(path.join(backupsPath, 'backup.json'), '{}');
 		const result = await testObject.resolve(joinPath(userDataResource, BACKUPS));
 		assert.ok(result.isDirectory);
 		assert.ok(result.children !== undefined);
@@ -277,7 +277,7 @@ suite('FileUserDataProvider', () => {
 
 class TestFileSystemProvider implements IFileSystemProviderWithFileReadWriteCapability {
 
-	constructor(readonly onDidChangeFile: Event<readonly IFileChange[]>) { }
+	constructor(readonly onDidChangeFile: Event<IFileChange[]>) { }
 
 	readonly capabilities: FileSystemProviderCapabilities = FileSystemProviderCapabilities.FileReadWrite;
 
@@ -309,7 +309,7 @@ suite('FileUserDataProvider - Watching', () => {
 	let userDataResource: URI;
 	const disposables = new DisposableStore();
 
-	const fileEventEmitter: Emitter<readonly IFileChange[]> = new Emitter<readonly IFileChange[]>();
+	const fileEventEmitter: Emitter<IFileChange[]> = new Emitter<IFileChange[]>();
 	disposables.add(fileEventEmitter);
 
 	setup(() => {
@@ -321,7 +321,7 @@ suite('FileUserDataProvider - Watching', () => {
 		localUserDataResource = URI.file(userDataPath);
 		userDataResource = localUserDataResource.with({ scheme: Schemas.userData });
 
-		const environmentService = new BrowserWorkbenchEnvironmentService({ remoteAuthority: 'remote', workspaceId: 'workspaceId', logsPath: URI.file('logFile') });
+		const environmentService = new BrowserWorkbenchEnvironmentService({ workspaceId: 'workspaceId' });
 		environmentService.userRoamingDataHome = userDataResource;
 
 		const userDataFileSystemProvider = new FileUserDataProvider(localUserDataResource, localBackupsResource, new TestFileSystemProvider(fileEventEmitter.event), environmentService);

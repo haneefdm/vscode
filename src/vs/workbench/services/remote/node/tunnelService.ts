@@ -8,14 +8,12 @@ import { Barrier } from 'vs/base/common/async';
 import { Disposable } from 'vs/base/common/lifecycle';
 import { NodeSocket } from 'vs/base/parts/ipc/node/ipc.net';
 import { IWorkbenchEnvironmentService } from 'vs/workbench/services/environment/common/environmentService';
-import product from 'vs/platform/product/common/product';
+import product from 'vs/platform/product/node/product';
 import { connectRemoteAgentTunnel, IConnectionOptions } from 'vs/platform/remote/common/remoteAgentConnection';
 import { IRemoteAuthorityResolverService } from 'vs/platform/remote/common/remoteAuthorityResolver';
 import { ITunnelService, RemoteTunnel } from 'vs/platform/remote/common/tunnel';
-import { nodeSocketFactory } from 'vs/platform/remote/node/nodeSocketFactory';
+import { nodeWebSocketFactory } from 'vs/platform/remote/node/nodeWebSocketFactory';
 import { ISignService } from 'vs/platform/sign/common/sign';
-import { registerSingleton } from 'vs/platform/instantiation/common/extensions';
-import { ILogService } from 'vs/platform/log/common/log';
 
 export async function createRemoteTunnel(options: IConnectionOptions, tunnelRemotePort: number): Promise<RemoteTunnel> {
 	const tunnel = new NodeRemoteTunnel(options, tunnelRemotePort);
@@ -86,26 +84,13 @@ class NodeRemoteTunnel extends Disposable implements RemoteTunnel {
 }
 
 export class TunnelService implements ITunnelService {
-	_serviceBrand: undefined;
-
-	private readonly _tunnels = new Map</* port */ number, { refcount: number, readonly value: Promise<RemoteTunnel> }>();
+	_serviceBrand: any;
 
 	public constructor(
 		@IWorkbenchEnvironmentService private readonly environmentService: IWorkbenchEnvironmentService,
 		@IRemoteAuthorityResolverService private readonly remoteAuthorityResolverService: IRemoteAuthorityResolverService,
-		@ISignService private readonly signService: ISignService,
-		@ILogService private readonly logService: ILogService,
-	) { }
-
-	public get tunnels(): Promise<readonly RemoteTunnel[]> {
-		return Promise.all(Array.from(this._tunnels.values()).map(x => x.value));
-	}
-
-	dispose(): void {
-		for (const { value } of this._tunnels.values()) {
-			value.then(tunnel => tunnel.dispose());
-		}
-		this._tunnels.clear();
+		@ISignService private readonly signService: ISignService
+	) {
 	}
 
 	openTunnel(remotePort: number): Promise<RemoteTunnel> | undefined {
@@ -114,50 +99,18 @@ export class TunnelService implements ITunnelService {
 			return undefined;
 		}
 
-		const resolvedTunnel = this.retainOrCreateTunnel(remoteAuthority, remotePort);
-		if (!resolvedTunnel) {
-			return resolvedTunnel;
-		}
-
-		return resolvedTunnel.then(tunnel => ({
-			tunnelRemotePort: tunnel.tunnelRemotePort,
-			tunnelLocalPort: tunnel.tunnelLocalPort,
-			dispose: () => {
-				const existing = this._tunnels.get(remotePort);
-				if (existing) {
-					if (--existing.refcount <= 0) {
-						existing.value.then(tunnel => tunnel.dispose());
-						this._tunnels.delete(remotePort);
-					}
-				}
-			}
-		}));
-	}
-
-	private retainOrCreateTunnel(remoteAuthority: string, remotePort: number): Promise<RemoteTunnel> | undefined {
-		const existing = this._tunnels.get(remotePort);
-		if (existing) {
-			++existing.refcount;
-			return existing.value;
-		}
-
 		const options: IConnectionOptions = {
+			isBuilt: this.environmentService.isBuilt,
 			commit: product.commit,
-			socketFactory: nodeSocketFactory,
+			webSocketFactory: nodeWebSocketFactory,
 			addressProvider: {
 				getAddress: async () => {
-					const { authority } = await this.remoteAuthorityResolverService.resolveAuthority(remoteAuthority);
-					return { host: authority.host, port: authority.port };
+					const { host, port } = await this.remoteAuthorityResolverService.resolveAuthority(remoteAuthority);
+					return { host, port };
 				}
 			},
-			signService: this.signService,
-			logService: this.logService
+			signService: this.signService
 		};
-
-		const tunnel = createRemoteTunnel(options, remotePort);
-		this._tunnels.set(remotePort, { refcount: 1, value: tunnel });
-		return tunnel;
+		return createRemoteTunnel(options, remotePort);
 	}
 }
-
-registerSingleton(ITunnelService, TunnelService, true);

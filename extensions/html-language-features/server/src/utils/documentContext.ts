@@ -32,11 +32,7 @@ export function getDocumentContext(documentUri: string, workspaceFolders: Worksp
 					}
 				}
 			}
-			try {
-				return url.resolve(base, ref);
-			} catch {
-				return '';
-			}
+			return url.resolve(base, ref);
 		},
 	};
 }

@@ -11,6 +11,7 @@ import API from '../utils/api';
 import { nulToken } from '../utils/cancellation';
 import { applyCodeActionCommands, getEditForCodeAction } from '../utils/codeAction';
 import { Command, CommandManager } from '../utils/commandManager';
+import { VersionDependentRegistration } from '../utils/dependentRegistration';
 import { memoize } from '../utils/memoize';
 import TelemetryReporter from '../utils/telemetry';
 import * as typeConverters from '../utils/typeConverters';
@@ -173,6 +174,7 @@ class SupportedCodeActionProvider {
 }
 
 class TypeScriptQuickFixProvider implements vscode.CodeActionProvider {
+	public static readonly minVersion = API.v213;
 
 	public static readonly metadata: vscode.CodeActionProviderMetadata = {
 		providedCodeActionKinds: [vscode.CodeActionKind.QuickFix]
@@ -284,13 +286,7 @@ class TypeScriptQuickFixProvider implements vscode.CodeActionProvider {
 		}
 
 		// Make sure there are multiple diagnostics of the same type in the file
-		if (!this.diagnosticsManager.getDiagnostics(document.uri).some(x => {
-			if (x === diagnostic) {
-				return false;
-			}
-			return x.code === diagnostic.code
-				|| (fixAllErrorCodes.has(x.code as number) && fixAllErrorCodes.get(x.code as number) === fixAllErrorCodes.get(diagnostic.code as number));
-		})) {
+		if (!this.diagnosticsManager.getDiagnostics(document.uri).some(x => x.code === diagnostic.code && x !== diagnostic)) {
 			return results;
 		}
 
@@ -308,15 +304,6 @@ class TypeScriptQuickFixProvider implements vscode.CodeActionProvider {
 	}
 }
 
-// Some fix all actions can actually fix multiple differnt diagnostics. Make sure we still show the fix all action
-// in such cases
-const fixAllErrorCodes = new Map<number, number>([
-	// Missing async
-	[2339, 2339],
-	[2345, 2339],
-]);
-
-
 const preferredFixes = new Set([
 	'annotateWithTypeFromJSDoc',
 	'constructorForDerivedNeedSuperCall',
@@ -327,7 +314,6 @@ const preferredFixes = new Set([
 	'forgottenThisPropertyAccess',
 	'spelling',
 	'unusedIdentifier',
-	'addMissingAwait',
 ]);
 function isPreferredFix(tsAction: Proto.CodeFixAction): boolean {
 	return preferredFixes.has(tsAction.fixName);
@@ -341,7 +327,8 @@ export function register(
 	diagnosticsManager: DiagnosticsManager,
 	telemetryReporter: TelemetryReporter
 ) {
-	return vscode.languages.registerCodeActionsProvider(selector,
-		new TypeScriptQuickFixProvider(client, fileConfigurationManager, commandManager, diagnosticsManager, telemetryReporter),
-		TypeScriptQuickFixProvider.metadata);
+	return new VersionDependentRegistration(client, TypeScriptQuickFixProvider.minVersion, () =>
+		vscode.languages.registerCodeActionsProvider(selector,
+			new TypeScriptQuickFixProvider(client, fileConfigurationManager, commandManager, diagnosticsManager, telemetryReporter),
+			TypeScriptQuickFixProvider.metadata));
 }

@@ -23,7 +23,7 @@ export class ClearNotificationAction extends Action {
 		label: string,
 		@ICommandService private readonly commandService: ICommandService
 	) {
-		super(id, label, 'codicon-close');
+		super(id, label, 'clear-notification-action');
 	}
 
 	run(notification: INotificationViewItem): Promise<any> {
@@ -43,7 +43,7 @@ export class ClearAllNotificationsAction extends Action {
 		label: string,
 		@ICommandService private readonly commandService: ICommandService
 	) {
-		super(id, label, 'codicon-close-all');
+		super(id, label, 'clear-all-notifications-action');
 	}
 
 	run(notification: INotificationViewItem): Promise<any> {
@@ -63,7 +63,7 @@ export class HideNotificationsCenterAction extends Action {
 		label: string,
 		@ICommandService private readonly commandService: ICommandService
 	) {
-		super(id, label, 'codicon-chevron-down');
+		super(id, label, 'hide-all-notifications-action');
 	}
 
 	run(notification: INotificationViewItem): Promise<any> {
@@ -83,7 +83,7 @@ export class ExpandNotificationAction extends Action {
 		label: string,
 		@ICommandService private readonly commandService: ICommandService
 	) {
-		super(id, label, 'codicon-chevron-up');
+		super(id, label, 'expand-notification-action');
 	}
 
 	run(notification: INotificationViewItem): Promise<any> {
@@ -103,7 +103,7 @@ export class CollapseNotificationAction extends Action {
 		label: string,
 		@ICommandService private readonly commandService: ICommandService
 	) {
-		super(id, label, 'codicon-chevron-down');
+		super(id, label, 'collapse-notification-action');
 	}
 
 	run(notification: INotificationViewItem): Promise<any> {
@@ -123,7 +123,7 @@ export class ConfigureNotificationAction extends Action {
 		label: string,
 		private readonly _configurationActions: ReadonlyArray<IAction>
 	) {
-		super(id, label, 'codicon-gear');
+		super(id, label, 'configure-notification-action');
 	}
 
 	get configurationActions(): ReadonlyArray<IAction> {
@@ -145,7 +145,9 @@ export class CopyNotificationMessageAction extends Action {
 	}
 
 	run(notification: INotificationViewItem): Promise<any> {
-		return this.clipboardService.writeText(notification.message.raw);
+		this.clipboardService.writeText(notification.message.raw);
+
+		return Promise.resolve();
 	}
 }
 

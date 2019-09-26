@@ -10,16 +10,15 @@ import { ClientCoordinates, EditorMouseEvent, EditorPagePosition, PageCoordinate
 import { PartFingerprint, PartFingerprints } from 'vs/editor/browser/view/viewPart';
 import { ViewLine } from 'vs/editor/browser/viewParts/lines/viewLine';
 import { IViewCursorRenderData } from 'vs/editor/browser/viewParts/viewCursors/viewCursor';
-import { EditorLayoutInfo, EditorOption } from 'vs/editor/common/config/editorOptions';
+import { EditorLayoutInfo } from 'vs/editor/common/config/editorOptions';
 import { Position } from 'vs/editor/common/core/position';
 import { Range as EditorRange } from 'vs/editor/common/core/range';
 import { HorizontalRange } from 'vs/editor/common/view/renderingContext';
 import { ViewContext } from 'vs/editor/common/view/viewContext';
 import { IViewModel } from 'vs/editor/common/viewModel/viewModel';
-import { CursorColumns } from 'vs/editor/common/controller/cursorCommon';
 
 export interface IViewZoneData {
-	viewZoneId: string;
+	viewZoneId: number;
 	positionBefore: Position | null;
 	positionAfter: Position | null;
 	position: Position;
@@ -239,11 +238,10 @@ export class HitTestContext {
 
 	constructor(context: ViewContext, viewHelper: IPointerHandlerHelper, lastViewCursorsRenderData: IViewCursorRenderData[]) {
 		this.model = context.model;
-		const options = context.configuration.options;
-		this.layoutInfo = options.get(EditorOption.layoutInfo);
+		this.layoutInfo = context.configuration.editor.layoutInfo;
 		this.viewDomNode = viewHelper.viewDomNode;
-		this.lineHeight = options.get(EditorOption.lineHeight);
-		this.typicalHalfwidthCharacterWidth = options.get(EditorOption.fontInfo).typicalHalfwidthCharacterWidth;
+		this.lineHeight = context.configuration.editor.lineHeight;
+		this.typicalHalfwidthCharacterWidth = context.configuration.editor.fontInfo.typicalHalfwidthCharacterWidth;
 		this.lastViewCursorsRenderData = lastViewCursorsRenderData;
 		this._context = context;
 		this._viewHelper = viewHelper;
@@ -409,12 +407,7 @@ class HitTestRequest extends BareHitTestRequest {
 	}
 
 	public fulfill(type: MouseTargetType, position: Position | null = null, range: EditorRange | null = null, detail: any = null): MouseTarget {
-		let mouseColumn = this.mouseColumn;
-		if (position && position.column < this._ctx.model.getLineMaxColumn(position.lineNumber)) {
-			// Most likely, the line contains foreign decorations...
-			mouseColumn = CursorColumns.visibleColumnFromColumn(this._ctx.model.getLineContent(position.lineNumber), position.column, this._ctx.model.getOptions().tabSize) + 1;
-		}
-		return new MouseTarget(this.target, type, mouseColumn, position, range, detail);
+		return new MouseTarget(this.target, type, this.mouseColumn, position, range, detail);
 	}
 
 	public withTarget(target: Element | null): HitTestRequest {
@@ -714,10 +707,9 @@ export class MouseTargetFactory {
 	}
 
 	public getMouseColumn(editorPos: EditorPagePosition, pos: PageCoordinates): number {
-		const options = this._context.configuration.options;
-		const layoutInfo = options.get(EditorOption.layoutInfo);
+		const layoutInfo = this._context.configuration.editor.layoutInfo;
 		const mouseContentHorizontalOffset = this._context.viewLayout.getCurrentScrollLeft() + pos.x - editorPos.x - layoutInfo.contentLeft;
-		return MouseTargetFactory._getMouseColumn(mouseContentHorizontalOffset, options.get(EditorOption.fontInfo).typicalHalfwidthCharacterWidth);
+		return MouseTargetFactory._getMouseColumn(mouseContentHorizontalOffset, this._context.configuration.editor.fontInfo.typicalHalfwidthCharacterWidth);
 	}
 
 	public static _getMouseColumn(mouseContentHorizontalOffset: number, typicalHalfwidthCharacterWidth: number): number {

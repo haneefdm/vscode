@@ -23,7 +23,7 @@ import { registerSingleton } from 'vs/platform/instantiation/common/extensions';
 
 export class JSONEditingService implements IJSONEditingService {
 
-	public _serviceBrand: undefined;
+	public _serviceBrand: any;
 
 	private queue: Queue<void>;
 
@@ -35,24 +35,20 @@ export class JSONEditingService implements IJSONEditingService {
 		this.queue = new Queue<void>();
 	}
 
-	write(resource: URI, values: IJSONValue[], save: boolean): Promise<void> {
-		return Promise.resolve(this.queue.queue(() => this.doWriteConfiguration(resource, values, save))); // queue up writes to prevent race conditions
+	write(resource: URI, value: IJSONValue, save: boolean): Promise<void> {
+		return Promise.resolve(this.queue.queue(() => this.doWriteConfiguration(resource, value, save))); // queue up writes to prevent race conditions
 	}
 
-	private async doWriteConfiguration(resource: URI, values: IJSONValue[], save: boolean): Promise<void> {
+	private async doWriteConfiguration(resource: URI, value: IJSONValue, save: boolean): Promise<void> {
 		const reference = await this.resolveAndValidate(resource, save);
-		await this.writeToBuffer(reference.object.textEditorModel, values);
+		await this.writeToBuffer(reference.object.textEditorModel, value);
 
 		reference.dispose();
 	}
 
-	private async writeToBuffer(model: ITextModel, values: IJSONValue[]): Promise<any> {
-		let hasEdits: boolean = false;
-		for (const value of values) {
-			const edit = this.getEdits(model, value)[0];
-			hasEdits = this.applyEditsToBuffer(edit, model);
-		}
-		if (hasEdits) {
+	private async writeToBuffer(model: ITextModel, value: IJSONValue): Promise<any> {
+		const edit = this.getEdits(model, value)[0];
+		if (this.applyEditsToBuffer(edit, model)) {
 			return this.textFileService.save(model.uri);
 		}
 	}

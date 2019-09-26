@@ -86,7 +86,7 @@ export interface IStatusMessageChangeEvent {
 export class NotificationHandle implements INotificationHandle {
 
 	private readonly _onDidClose: Emitter<void> = new Emitter();
-	readonly onDidClose: Event<void> = this._onDidClose.event;
+	get onDidClose(): Event<void> { return this._onDidClose.event; }
 
 	constructor(private readonly item: INotificationViewItem, private readonly closeItem: (item: INotificationViewItem) => void) {
 		this.registerListeners();
@@ -126,10 +126,10 @@ export class NotificationsModel extends Disposable implements INotificationsMode
 	private static NO_OP_NOTIFICATION = new NoOpNotification();
 
 	private readonly _onDidNotificationChange: Emitter<INotificationChangeEvent> = this._register(new Emitter<INotificationChangeEvent>());
-	readonly onDidNotificationChange: Event<INotificationChangeEvent> = this._onDidNotificationChange.event;
+	get onDidNotificationChange(): Event<INotificationChangeEvent> { return this._onDidNotificationChange.event; }
 
 	private readonly _onDidStatusMessageChange: Emitter<IStatusMessageChangeEvent> = this._register(new Emitter<IStatusMessageChangeEvent>());
-	readonly onDidStatusMessageChange: Event<IStatusMessageChangeEvent> = this._onDidStatusMessageChange.event;
+	get onDidStatusMessageChange(): Event<IStatusMessageChangeEvent> { return this._onDidStatusMessageChange.event; }
 
 	private readonly _notifications: INotificationViewItem[] = [];
 	get notifications(): INotificationViewItem[] { return this._notifications; }
@@ -243,7 +243,7 @@ export interface INotificationViewItem {
 	readonly silent: boolean;
 	readonly message: INotificationMessage;
 	readonly source: string | undefined;
-	readonly actions: INotificationActions | undefined;
+	readonly actions: INotificationActions;
 	readonly progress: INotificationViewItemProgress;
 
 	readonly expanded: boolean;
@@ -301,7 +301,7 @@ export class NotificationViewItemProgress extends Disposable implements INotific
 	private readonly _state: INotificationViewItemProgressState;
 
 	private readonly _onDidChange: Emitter<void> = this._register(new Emitter<void>());
-	readonly onDidChange: Event<void> = this._onDidChange.event;
+	get onDidChange(): Event<void> { return this._onDidChange.event; }
 
 	constructor() {
 		super();
@@ -391,19 +391,19 @@ export class NotificationViewItem extends Disposable implements INotificationVie
 	// RegEx: [, anything not ], ], (, http://|https://|command:, no whitespace)
 	private static LINK_REGEX = /\[([^\]]+)\]\(((?:https?:\/\/|command:)[^\)\s]+)(?: "([^"]+)")?\)/gi;
 
-	private _expanded: boolean | undefined;
+	private _expanded: boolean;
 
-	private _actions: INotificationActions | undefined;
-	private _progress: NotificationViewItemProgress | undefined;
+	private _actions: INotificationActions;
+	private _progress: NotificationViewItemProgress;
 
 	private readonly _onDidExpansionChange: Emitter<void> = this._register(new Emitter<void>());
-	readonly onDidExpansionChange: Event<void> = this._onDidExpansionChange.event;
+	get onDidExpansionChange(): Event<void> { return this._onDidExpansionChange.event; }
 
 	private readonly _onDidClose: Emitter<void> = this._register(new Emitter<void>());
-	readonly onDidClose: Event<void> = this._onDidClose.event;
+	get onDidClose(): Event<void> { return this._onDidClose.event; }
 
 	private readonly _onDidLabelChange: Emitter<INotificationViewItemLabelChangeEvent> = this._register(new Emitter<INotificationViewItemLabelChangeEvent>());
-	readonly onDidLabelChange: Event<INotificationViewItemLabelChangeEvent> = this._onDidLabelChange.event;
+	get onDidLabelChange(): Event<INotificationViewItemLabelChangeEvent> { return this._onDidLabelChange.event; }
 
 	static create(notification: INotification): INotificationViewItem | null {
 		if (!notification || !notification.message || isPromiseCanceledError(notification.message)) {
@@ -505,7 +505,7 @@ export class NotificationViewItem extends Disposable implements INotificationVie
 	}
 
 	get expanded(): boolean {
-		return !!this._expanded;
+		return this._expanded;
 	}
 
 	get severity(): Severity {
@@ -534,10 +534,6 @@ export class NotificationViewItem extends Disposable implements INotificationVie
 	}
 
 	hasPrompt(): boolean {
-		if (!this._actions) {
-			return false;
-		}
-
 		if (!this._actions.primary) {
 			return false;
 		}
@@ -566,7 +562,7 @@ export class NotificationViewItem extends Disposable implements INotificationVie
 		return this._source;
 	}
 
-	get actions(): INotificationActions | undefined {
+	get actions(): INotificationActions {
 		return this._actions;
 	}
 
@@ -639,8 +635,8 @@ export class NotificationViewItem extends Disposable implements INotificationVie
 			return false;
 		}
 
-		const primaryActions = (this._actions && this._actions.primary) || [];
-		const otherPrimaryActions = (other.actions && other.actions.primary) || [];
+		const primaryActions = this._actions.primary || [];
+		const otherPrimaryActions = other.actions.primary || [];
 		if (primaryActions.length !== otherPrimaryActions.length) {
 			return false;
 		}
@@ -658,7 +654,7 @@ export class NotificationViewItem extends Disposable implements INotificationVie
 export class ChoiceAction extends Action {
 
 	private readonly _onDidRun = new Emitter<void>();
-	readonly onDidRun: Event<void> = this._onDidRun.event;
+	get onDidRun(): Event<void> { return this._onDidRun.event; }
 
 	private readonly _keepOpen: boolean;
 

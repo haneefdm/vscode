@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Emitter, Event } from 'vs/base/common/event';
-import { DisposableStore } from 'vs/base/common/lifecycle';
+import { IDisposable, dispose } from 'vs/base/common/lifecycle';
 import { URI, UriComponents } from 'vs/base/common/uri';
 import { IModelChangedEvent } from 'vs/editor/common/model/mirrorTextModel';
 import { ExtHostDocumentsShape, IMainContext, MainContext, MainThreadDocumentsShape } from 'vs/workbench/api/common/extHost.protocol';
@@ -15,17 +15,17 @@ import * as vscode from 'vscode';
 
 export class ExtHostDocuments implements ExtHostDocumentsShape {
 
-	private readonly _onDidAddDocument = new Emitter<vscode.TextDocument>();
-	private readonly _onDidRemoveDocument = new Emitter<vscode.TextDocument>();
-	private readonly _onDidChangeDocument = new Emitter<vscode.TextDocumentChangeEvent>();
-	private readonly _onDidSaveDocument = new Emitter<vscode.TextDocument>();
+	private _onDidAddDocument = new Emitter<vscode.TextDocument>();
+	private _onDidRemoveDocument = new Emitter<vscode.TextDocument>();
+	private _onDidChangeDocument = new Emitter<vscode.TextDocumentChangeEvent>();
+	private _onDidSaveDocument = new Emitter<vscode.TextDocument>();
 
 	readonly onDidAddDocument: Event<vscode.TextDocument> = this._onDidAddDocument.event;
 	readonly onDidRemoveDocument: Event<vscode.TextDocument> = this._onDidRemoveDocument.event;
 	readonly onDidChangeDocument: Event<vscode.TextDocumentChangeEvent> = this._onDidChangeDocument.event;
 	readonly onDidSaveDocument: Event<vscode.TextDocument> = this._onDidSaveDocument.event;
 
-	private readonly _toDispose = new DisposableStore();
+	private _toDispose: IDisposable[];
 	private _proxy: MainThreadDocumentsShape;
 	private _documentsAndEditors: ExtHostDocumentsAndEditors;
 	private _documentLoader = new Map<string, Promise<ExtHostDocumentData>>();
@@ -34,20 +34,22 @@ export class ExtHostDocuments implements ExtHostDocumentsShape {
 		this._proxy = mainContext.getProxy(MainContext.MainThreadDocuments);
 		this._documentsAndEditors = documentsAndEditors;
 
-		this._documentsAndEditors.onDidRemoveDocuments(documents => {
-			for (const data of documents) {
-				this._onDidRemoveDocument.fire(data.document);
-			}
-		}, undefined, this._toDispose);
-		this._documentsAndEditors.onDidAddDocuments(documents => {
-			for (const data of documents) {
-				this._onDidAddDocument.fire(data.document);
-			}
-		}, undefined, this._toDispose);
+		this._toDispose = [
+			this._documentsAndEditors.onDidRemoveDocuments(documents => {
+				for (const data of documents) {
+					this._onDidRemoveDocument.fire(data.document);
+				}
+			}),
+			this._documentsAndEditors.onDidAddDocuments(documents => {
+				for (const data of documents) {
+					this._onDidAddDocument.fire(data.document);
+				}
+			})
+		];
 	}
 
 	public dispose(): void {
-		this._toDispose.dispose();
+		dispose(this._toDispose);
 	}
 
 	public getAllDocumentData(): ExtHostDocumentData[] {

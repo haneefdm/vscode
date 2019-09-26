@@ -16,7 +16,6 @@ import { EditorContextKeys } from 'vs/editor/common/editorContextKeys';
 import { MenuId } from 'vs/platform/actions/common/actions';
 import { ServicesAccessor } from 'vs/platform/instantiation/common/instantiation';
 import { KeybindingWeight } from 'vs/platform/keybinding/common/keybindingsRegistry';
-import { EditorOption } from 'vs/editor/common/config/editorOptions';
 
 const CLIPBOARD_CONTEXT_MENU_GROUP = '9_cutcopypaste';
 
@@ -95,7 +94,7 @@ class ExecCommandCutAction extends ExecCommandAction {
 			return;
 		}
 
-		const emptySelectionClipboard = editor.getOption(EditorOption.emptySelectionClipboard);
+		const emptySelectionClipboard = editor.getConfiguration().emptySelectionClipboard;
 
 		if (!emptySelectionClipboard && editor.getSelection().isEmpty()) {
 			return;
@@ -144,10 +143,16 @@ class ExecCommandCopyAction extends ExecCommandAction {
 			return;
 		}
 
-		const emptySelectionClipboard = editor.getOption(EditorOption.emptySelectionClipboard);
+		const emptySelectionClipboard = editor.getConfiguration().emptySelectionClipboard;
 
 		if (!emptySelectionClipboard && editor.getSelection().isEmpty()) {
 			return;
+		}
+		// Prevent copying an empty line by accident
+		if (editor.getSelections().length === 1 && editor.getSelection().isEmpty()) {
+			if (editor.getModel().getLineFirstNonWhitespaceColumn(editor.getSelection().positionLineNumber) === 0) {
+				return;
+			}
 		}
 
 		super.run(accessor, editor);
@@ -210,7 +215,7 @@ class ExecCommandCopyWithSyntaxHighlightingAction extends ExecCommandAction {
 			return;
 		}
 
-		const emptySelectionClipboard = editor.getOption(EditorOption.emptySelectionClipboard);
+		const emptySelectionClipboard = editor.getConfiguration().emptySelectionClipboard;
 
 		if (!emptySelectionClipboard && editor.getSelection().isEmpty()) {
 			return;

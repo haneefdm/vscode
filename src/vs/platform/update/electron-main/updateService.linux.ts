@@ -3,31 +3,32 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import product from 'vs/platform/product/common/product';
+import product from 'vs/platform/product/node/product';
 import { IConfigurationService } from 'vs/platform/configuration/common/configuration';
-import { ILifecycleMainService } from 'vs/platform/lifecycle/electron-main/lifecycleMainService';
+import { ILifecycleService } from 'vs/platform/lifecycle/electron-main/lifecycleMain';
+import { IRequestService } from 'vs/platform/request/node/request';
 import { State, IUpdate, AvailableForDownload, UpdateType } from 'vs/platform/update/common/update';
 import { ITelemetryService } from 'vs/platform/telemetry/common/telemetry';
 import { IEnvironmentService } from 'vs/platform/environment/common/environment';
 import { ILogService } from 'vs/platform/log/common/log';
-import { createUpdateURL, AbstractUpdateService, UpdateNotAvailableClassification } from 'vs/platform/update/electron-main/abstractUpdateService';
-import { IRequestService, asJson } from 'vs/platform/request/common/request';
+import { createUpdateURL, AbstractUpdateService } from 'vs/platform/update/electron-main/abstractUpdateService';
+import { asJson } from 'vs/base/node/request';
 import { shell } from 'electron';
 import { CancellationToken } from 'vs/base/common/cancellation';
 
 export class LinuxUpdateService extends AbstractUpdateService {
 
-	_serviceBrand: undefined;
+	_serviceBrand: any;
 
 	constructor(
-		@ILifecycleMainService lifecycleMainService: ILifecycleMainService,
+		@ILifecycleService lifecycleService: ILifecycleService,
 		@IConfigurationService configurationService: IConfigurationService,
 		@ITelemetryService private readonly telemetryService: ITelemetryService,
 		@IEnvironmentService environmentService: IEnvironmentService,
 		@IRequestService requestService: IRequestService,
 		@ILogService logService: ILogService
 	) {
-		super(lifecycleMainService, configurationService, environmentService, requestService, logService);
+		super(lifecycleService, configurationService, environmentService, requestService, logService);
 	}
 
 	protected buildUpdateFeedUrl(quality: string): string {
@@ -40,11 +41,17 @@ export class LinuxUpdateService extends AbstractUpdateService {
 		}
 
 		this.setState(State.CheckingForUpdates(context));
+
 		this.requestService.request({ url: this.url }, CancellationToken.None)
 			.then<IUpdate>(asJson)
 			.then(update => {
 				if (!update || !update.url || !update.version || !update.productVersion) {
-					this.telemetryService.publicLog2<{ explicit: boolean }, UpdateNotAvailableClassification>('update:notAvailable', { explicit: !!context });
+					/* __GDPR__
+							"update:notAvailable" : {
+								"explicit" : { "classification": "SystemMetaData", "purpose": "FeatureInsight", "isMeasurement": true }
+							}
+						*/
+					this.telemetryService.publicLog('update:notAvailable', { explicit: !!context });
 
 					this.setState(State.Idle(UpdateType.Archive));
 				} else {
@@ -53,7 +60,14 @@ export class LinuxUpdateService extends AbstractUpdateService {
 			})
 			.then(undefined, err => {
 				this.logService.error(err);
-				this.telemetryService.publicLog2<{ explicit: boolean }, UpdateNotAvailableClassification>('update:notAvailable', { explicit: !!context });
+
+				/* __GDPR__
+					"update:notAvailable" : {
+						"explicit" : { "classification": "SystemMetaData", "purpose": "FeatureInsight", "isMeasurement": true }
+					}
+					*/
+				this.telemetryService.publicLog('update:notAvailable', { explicit: !!context });
+
 				// only show message when explicitly checking for updates
 				const message: string | undefined = !!context ? (err.message || err) : undefined;
 				this.setState(State.Idle(UpdateType.Archive, message));

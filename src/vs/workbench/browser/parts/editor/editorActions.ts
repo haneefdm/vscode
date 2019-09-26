@@ -16,7 +16,7 @@ import { IHistoryService } from 'vs/workbench/services/history/common/history';
 import { IKeybindingService } from 'vs/platform/keybinding/common/keybinding';
 import { ICommandService } from 'vs/platform/commands/common/commands';
 import { ITextFileService } from 'vs/workbench/services/textfile/common/textfiles';
-import { IWorkspacesHistoryService } from 'vs/workbench/services/workspace/common/workspacesHistoryService';
+import { IWindowsService } from 'vs/platform/windows/common/windows';
 import { CLOSE_EDITOR_COMMAND_ID, NAVIGATE_ALL_EDITORS_GROUP_PREFIX, MOVE_ACTIVE_EDITOR_COMMAND_ID, NAVIGATE_IN_ACTIVE_GROUP_PREFIX, ActiveEditorMoveArguments, SPLIT_EDITOR_LEFT, SPLIT_EDITOR_RIGHT, SPLIT_EDITOR_UP, SPLIT_EDITOR_DOWN, splitEditor, LAYOUT_EDITOR_GROUPS_COMMAND_ID, mergeAllGroups } from 'vs/workbench/browser/parts/editor/editorCommands';
 import { IEditorGroupsService, IEditorGroup, GroupsArrangement, EditorsOrder, GroupLocation, GroupDirection, preferredSideBySideGroupDirection, IFindGroupScope, GroupOrientation, EditorGroupLayout, GroupsOrder } from 'vs/workbench/services/editor/common/editorGroupsService';
 import { IEditorService, SIDE_GROUP } from 'vs/workbench/services/editor/common/editorService';
@@ -467,7 +467,7 @@ export class CloseEditorAction extends Action {
 		label: string,
 		@ICommandService private readonly commandService: ICommandService
 	) {
-		super(id, label, 'codicon-close');
+		super(id, label, 'close-editor-action');
 	}
 
 	run(context?: IEditorCommandsContext): Promise<any> {
@@ -485,7 +485,7 @@ export class CloseOneEditorAction extends Action {
 		label: string,
 		@IEditorGroupsService private readonly editorGroupService: IEditorGroupsService
 	) {
-		super(id, label, 'codicon-close');
+		super(id, label, 'close-editor-action');
 	}
 
 	run(context?: IEditorCommandsContext): Promise<any> {
@@ -618,24 +618,12 @@ export abstract class BaseCloseAllAction extends Action {
 
 	async run(): Promise<any> {
 
-		// Just close all if there are no dirty editors
-		if (!this.textFileService.isDirty()) {
+		// Just close all if there are no or one dirty editor
+		if (this.textFileService.getDirty().length < 2) {
 			return this.doCloseAll();
 		}
 
-		// Otherwise ask for combined confirmation and make sure
-		// to bring each dirty editor to the front so that the user
-		// can review if the files should be changed or not.
-		await Promise.all(this.groupsToClose.map(async groupToClose => {
-			for (const editor of groupToClose.getEditors(EditorsOrder.MOST_RECENTLY_ACTIVE)) {
-				if (editor.isDirty()) {
-					return groupToClose.openEditor(editor);
-				}
-			}
-
-			return undefined;
-		}));
-
+		// Otherwise ask for combined confirmation
 		const confirm = await this.textFileService.confirmSave();
 		if (confirm === ConfirmResult.CANCEL) {
 			return;
@@ -669,7 +657,7 @@ export class CloseAllEditorsAction extends BaseCloseAllAction {
 		@ITextFileService textFileService: ITextFileService,
 		@IEditorGroupsService editorGroupService: IEditorGroupsService
 	) {
-		super(id, label, 'codicon-close-all', textFileService, editorGroupService);
+		super(id, label, 'action-close-all-files', textFileService, editorGroupService);
 	}
 
 	protected doCloseAll(): Promise<any> {
@@ -887,22 +875,6 @@ export class ResetGroupSizesAction extends Action {
 
 	run(): Promise<any> {
 		this.editorGroupService.arrangeGroups(GroupsArrangement.EVEN);
-
-		return Promise.resolve(false);
-	}
-}
-
-export class ToggleGroupSizesAction extends Action {
-
-	static readonly ID = 'workbench.action.toggleEditorWidths';
-	static readonly LABEL = nls.localize('toggleEditorWidths', "Toggle Editor Group Sizes");
-
-	constructor(id: string, label: string, @IEditorGroupsService private readonly editorGroupService: IEditorGroupsService) {
-		super(id, label);
-	}
-
-	run(): Promise<any> {
-		this.editorGroupService.arrangeGroups(GroupsArrangement.TOGGLE);
 
 		return Promise.resolve(false);
 	}
@@ -1218,7 +1190,7 @@ export class ClearRecentFilesAction extends Action {
 	constructor(
 		id: string,
 		label: string,
-		@IWorkspacesHistoryService private readonly workspacesHistoryService: IWorkspacesHistoryService,
+		@IWindowsService private readonly windowsService: IWindowsService,
 		@IHistoryService private readonly historyService: IHistoryService
 	) {
 		super(id, label);
@@ -1227,7 +1199,7 @@ export class ClearRecentFilesAction extends Action {
 	run(): Promise<any> {
 
 		// Clear global recently opened
-		this.workspacesHistoryService.clearRecentlyOpened();
+		this.windowsService.clearRecentlyOpened();
 
 		// Clear workspace specific recently opened
 		this.historyService.clearRecentlyOpened();

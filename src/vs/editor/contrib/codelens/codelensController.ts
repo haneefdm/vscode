@@ -17,7 +17,6 @@ import { CodeLensWidget, CodeLensHelper } from 'vs/editor/contrib/codelens/codel
 import { ICommandService } from 'vs/platform/commands/common/commands';
 import { INotificationService } from 'vs/platform/notification/common/notification';
 import { ICodeLensCache } from 'vs/editor/contrib/codelens/codeLensCache';
-import { EditorOption } from 'vs/editor/common/config/editorOptions';
 
 export class CodeLensContribution implements editorCommon.IEditorContribution {
 
@@ -33,7 +32,7 @@ export class CodeLensContribution implements editorCommon.IEditorContribution {
 	private _currentCodeLensModel: CodeLensModel | undefined;
 	private _modelChangeCounter: number = 0;
 	private _currentResolveCodeLensSymbolsPromise: CancelablePromise<any> | undefined;
-	private _detectVisibleLenses: RunOnceScheduler | undefined;
+	private _detectVisibleLenses: RunOnceScheduler;
 
 	constructor(
 		private readonly _editor: editorBrowser.ICodeEditor,
@@ -41,13 +40,13 @@ export class CodeLensContribution implements editorCommon.IEditorContribution {
 		@INotificationService private readonly _notificationService: INotificationService,
 		@ICodeLensCache private readonly _codeLensCache: ICodeLensCache
 	) {
-		this._isEnabled = this._editor.getOption(EditorOption.codeLens);
+		this._isEnabled = this._editor.getConfiguration().contribInfo.codeLens;
 
 		this._globalToDispose.add(this._editor.onDidChangeModel(() => this._onModelChange()));
 		this._globalToDispose.add(this._editor.onDidChangeModelLanguage(() => this._onModelChange()));
 		this._globalToDispose.add(this._editor.onDidChangeConfiguration(() => {
 			const prevIsEnabled = this._isEnabled;
-			this._isEnabled = this._editor.getOption(EditorOption.codeLens);
+			this._isEnabled = this._editor.getConfiguration().contribInfo.codeLens;
 			if (prevIsEnabled !== this._isEnabled) {
 				this._onModelChange();
 			}
@@ -122,7 +121,9 @@ export class CodeLensContribution implements editorCommon.IEditorContribution {
 			}
 		}
 
-		const detectVisibleLenses = this._detectVisibleLenses = new RunOnceScheduler(() => this._onViewportChanged(), 250);
+		this._detectVisibleLenses = new RunOnceScheduler(() => {
+			this._onViewportChanged();
+		}, 250);
 
 		const scheduler = new RunOnceScheduler(() => {
 			const counterValue = ++this._modelChangeCounter;
@@ -144,12 +145,12 @@ export class CodeLensContribution implements editorCommon.IEditorContribution {
 
 					// render lenses
 					this._renderCodeLensSymbols(result);
-					detectVisibleLenses.schedule();
+					this._detectVisibleLenses.schedule();
 				}
 			}, onUnexpectedError);
 		}, 250);
 		this._localToDispose.add(scheduler);
-		this._localToDispose.add(detectVisibleLenses);
+		this._localToDispose.add(this._detectVisibleLenses);
 		this._localToDispose.add(this._editor.onDidChangeModelContent(() => {
 			this._editor.changeDecorations(decorationsAccessor => {
 				this._editor.changeViewZones(viewZonesAccessor => {
@@ -178,17 +179,17 @@ export class CodeLensContribution implements editorCommon.IEditorContribution {
 			});
 
 			// Compute new `visible` code lenses
-			detectVisibleLenses.schedule();
+			this._detectVisibleLenses.schedule();
 			// Ask for all references again
 			scheduler.schedule();
 		}));
 		this._localToDispose.add(this._editor.onDidScrollChange(e => {
 			if (e.scrollTopChanged && this._lenses.length > 0) {
-				detectVisibleLenses.schedule();
+				this._detectVisibleLenses.schedule();
 			}
 		}));
 		this._localToDispose.add(this._editor.onDidLayoutChange(() => {
-			detectVisibleLenses.schedule();
+			this._detectVisibleLenses.schedule();
 		}));
 		this._localToDispose.add(toDisposable(() => {
 			if (this._editor.getModel()) {
@@ -205,7 +206,7 @@ export class CodeLensContribution implements editorCommon.IEditorContribution {
 			}
 		}));
 		this._localToDispose.add(this._editor.onDidChangeConfiguration(e => {
-			if (e.hasChanged(EditorOption.fontInfo)) {
+			if (e.fontInfo) {
 				for (const lens of this._lenses) {
 					lens.updateHeight();
 				}
@@ -280,7 +281,7 @@ export class CodeLensContribution implements editorCommon.IEditorContribution {
 						groupsIndex++;
 						codeLensIndex++;
 					} else {
-						this._lenses.splice(codeLensIndex, 0, new CodeLensWidget(groups[groupsIndex], this._editor, helper, viewZoneAccessor, () => this._detectVisibleLenses && this._detectVisibleLenses.schedule()));
+						this._lenses.splice(codeLensIndex, 0, new CodeLensWidget(groups[groupsIndex], this._editor, helper, viewZoneAccessor, () => this._detectVisibleLenses.schedule()));
 						codeLensIndex++;
 						groupsIndex++;
 					}
@@ -294,7 +295,7 @@ export class CodeLensContribution implements editorCommon.IEditorContribution {
 
 				// Create extra symbols
 				while (groupsIndex < groups.length) {
-					this._lenses.push(new CodeLensWidget(groups[groupsIndex], this._editor, helper, viewZoneAccessor, () => this._detectVisibleLenses && this._detectVisibleLenses.schedule()));
+					this._lenses.push(new CodeLensWidget(groups[groupsIndex], this._editor, helper, viewZoneAccessor, () => this._detectVisibleLenses.schedule()));
 					groupsIndex++;
 				}
 

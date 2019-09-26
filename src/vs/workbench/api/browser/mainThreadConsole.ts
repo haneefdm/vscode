@@ -6,11 +6,10 @@
 import { extHostNamedCustomer } from 'vs/workbench/api/common/extHostCustomers';
 import { MainContext, MainThreadConsoleShape, IExtHostContext } from 'vs/workbench/api/common/extHost.protocol';
 import { IEnvironmentService } from 'vs/platform/environment/common/environment';
-import { IRemoteConsoleLog, log } from 'vs/base/common/console';
-import { logRemoteEntry } from 'vs/workbench/services/extensions/common/remoteConsoleUtil';
+import { IRemoteConsoleLog, log, parse } from 'vs/base/common/console';
 import { parseExtensionDevOptions } from 'vs/workbench/services/extensions/common/extensionDevOptions';
-import { ILogService } from 'vs/platform/log/common/log';
-import { IExtensionHostDebugService } from 'vs/platform/debug/common/extensionHostDebug';
+import { IWindowsService } from 'vs/platform/windows/common/windows';
+import { IExtensionHostDebugService } from 'vs/workbench/services/extensions/common/extensionHostDebug';
 
 @extHostNamedCustomer(MainContext.MainThreadConsole)
 export class MainThreadConsole implements MainThreadConsoleShape {
@@ -21,7 +20,7 @@ export class MainThreadConsole implements MainThreadConsoleShape {
 	constructor(
 		extHostContext: IExtHostContext,
 		@IEnvironmentService private readonly _environmentService: IEnvironmentService,
-		@ILogService private readonly _logService: ILogService,
+		@IWindowsService private readonly _windowsService: IWindowsService,
 		@IExtensionHostDebugService private readonly _extensionHostDebugService: IExtensionHostDebugService,
 	) {
 		const devOpts = parseExtensionDevOptions(this._environmentService);
@@ -41,7 +40,7 @@ export class MainThreadConsole implements MainThreadConsoleShape {
 
 		// Log on main side if running tests from cli
 		if (this._isExtensionDevTestFromCli) {
-			logRemoteEntry(this._logService, entry);
+			this._windowsService.log(entry.severity, ...parse(entry).args);
 		}
 
 		// Broadcast to other windows if we are in development mode

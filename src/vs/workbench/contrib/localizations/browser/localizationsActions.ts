@@ -9,7 +9,7 @@ import { IEnvironmentService } from 'vs/platform/environment/common/environment'
 import { ILocalizationsService, LanguageType } from 'vs/platform/localizations/common/localizations';
 import { IQuickInputService, IQuickPickItem } from 'vs/platform/quickinput/common/quickInput';
 import { IJSONEditingService } from 'vs/workbench/services/configuration/common/jsonEditing';
-import { IHostService } from 'vs/workbench/services/host/browser/host';
+import { IWindowsService } from 'vs/platform/windows/common/windows';
 import { INotificationService } from 'vs/platform/notification/common/notification';
 import { language } from 'vs/base/common/platform';
 import { firstIndex } from 'vs/base/common/arrays';
@@ -26,7 +26,7 @@ export class ConfigureLocaleAction extends Action {
 		@ILocalizationsService private readonly localizationService: ILocalizationsService,
 		@IQuickInputService private readonly quickInputService: IQuickInputService,
 		@IJSONEditingService private readonly jsonEditingService: IJSONEditingService,
-		@IHostService private readonly hostService: IHostService,
+		@IWindowsService private readonly windowsService: IWindowsService,
 		@INotificationService private readonly notificationService: INotificationService,
 		@IViewletService private readonly viewletService: IViewletService,
 		@IDialogService private readonly dialogService: IDialogService
@@ -65,7 +65,7 @@ export class ConfigureLocaleAction extends Action {
 			}
 
 			if (selectedLanguage) {
-				await this.jsonEditingService.write(this.environmentService.localeResource, [{ key: 'locale', value: selectedLanguage.label }], true);
+				await this.jsonEditingService.write(this.environmentService.localeResource, { key: 'locale', value: selectedLanguage.label }, true);
 				const restart = await this.dialogService.confirm({
 					type: 'info',
 					message: localize('relaunchDisplayLanguageMessage', "A restart is required for the change in display language to take effect."),
@@ -74,7 +74,7 @@ export class ConfigureLocaleAction extends Action {
 				});
 
 				if (restart.confirmed) {
-					this.hostService.restart();
+					this.windowsService.relaunch({});
 				}
 			}
 		} catch (e) {

@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as nls from 'vs/nls';
-import * as vscode from 'vscode';
 import { IDisposable } from 'vs/base/common/lifecycle';
 import { ExtensionDescriptionRegistry } from 'vs/workbench/services/extensions/common/extensionDescriptionRegistry';
 import { ExtensionIdentifier } from 'vs/platform/extensions/common/extensions';
@@ -12,11 +11,29 @@ import { ExtensionActivationError, MissingDependencyError } from 'vs/workbench/s
 
 const NO_OP_VOID_PROMISE = Promise.resolve<void>(undefined);
 
+export interface IExtensionMemento {
+	get<T>(key: string): T | undefined;
+	get<T>(key: string, defaultValue: T): T;
+	update(key: string, value: any): Promise<void>;
+}
+
+export interface IExtensionContext {
+	subscriptions: IDisposable[];
+	workspaceState: IExtensionMemento;
+	globalState: IExtensionMemento;
+	extensionPath: string;
+	storagePath: string;
+	globalStoragePath: string;
+	asAbsolutePath(relativePath: string): string;
+	readonly logPath: string;
+	executionContext: number;
+}
+
 /**
  * Represents the source code (module) of an extension.
  */
 export interface IExtensionModule {
-	activate?(ctx: vscode.ExtensionContext): Promise<IExtensionAPI>;
+	activate?(ctx: IExtensionContext): Promise<IExtensionAPI>;
 	deactivate?(): void;
 }
 
@@ -161,13 +178,20 @@ export interface IExtensionsActivatorHost {
 	actualActivateExtension(extensionId: ExtensionIdentifier, reason: ExtensionActivationReason): Promise<ActivatedExtension>;
 }
 
-export interface ExtensionActivationReason {
-	readonly startup: boolean;
-	readonly extensionId: ExtensionIdentifier;
-	readonly activationEvent: string;
+export class ExtensionActivatedByEvent {
+	constructor(
+		public readonly startup: boolean,
+		public readonly activationEvent: string
+	) { }
 }
 
-type ActivationIdAndReason = { id: ExtensionIdentifier, reason: ExtensionActivationReason };
+export class ExtensionActivatedByAPI {
+	constructor(
+		public readonly startup: boolean
+	) { }
+}
+
+export type ExtensionActivationReason = ExtensionActivatedByEvent | ExtensionActivatedByAPI;
 
 export class ExtensionsActivator {
 
@@ -210,15 +234,12 @@ export class ExtensionsActivator {
 		return activatedExtension;
 	}
 
-	public activateByEvent(activationEvent: string, startup: boolean): Promise<void> {
+	public activateByEvent(activationEvent: string, reason: ExtensionActivationReason): Promise<void> {
 		if (this._alreadyActivatedEvents[activationEvent]) {
 			return NO_OP_VOID_PROMISE;
 		}
 		const activateExtensions = this._registry.getExtensionDescriptionsForActivationEvent(activationEvent);
-		return this._activateExtensions(activateExtensions.map(e => ({
-			id: e.identifier,
-			reason: { startup, extensionId: e.identifier, activationEvent }
-		}))).then(() => {
+		return this._activateExtensions(activateExtensions.map(e => e.identifier), reason).then(() => {
 			this._alreadyActivatedEvents[activationEvent] = true;
 		});
 	}
@@ -229,23 +250,20 @@ export class ExtensionsActivator {
 			throw new Error('Extension `' + extensionId + '` is not known');
 		}
 
-		return this._activateExtensions([{
-			id: desc.identifier,
-			reason
-		}]);
+		return this._activateExtensions([desc.identifier], reason);
 	}
 
 	/**
 	 * Handle semantics related to dependencies for `currentExtension`.
 	 * semantics: `redExtensions` must wait for `greenExtensions`.
 	 */
-	private _handleActivateRequest(currentActivation: ActivationIdAndReason, greenExtensions: { [id: string]: ActivationIdAndReason; }, redExtensions: ActivationIdAndReason[]): void {
-		if (this._hostExtensionsMap.has(ExtensionIdentifier.toKey(currentActivation.id))) {
-			greenExtensions[ExtensionIdentifier.toKey(currentActivation.id)] = currentActivation;
+	private _handleActivateRequest(currentExtensionId: ExtensionIdentifier, greenExtensions: { [id: string]: ExtensionIdentifier; }, redExtensions: ExtensionIdentifier[]): void {
+		if (this._hostExtensionsMap.has(ExtensionIdentifier.toKey(currentExtensionId))) {
+			greenExtensions[ExtensionIdentifier.toKey(currentExtensionId)] = currentExtensionId;
 			return;
 		}
 
-		const currentExtension = this._registry.getExtensionDescription(currentActivation.id)!;
+		const currentExtension = this._registry.getExtensionDescription(currentExtensionId)!;
 		const depIds = (typeof currentExtension.extensionDependencies === 'undefined' ? [] : currentExtension.extensionDependencies);
 		let currentExtensionGetsGreenLight = true;
 
@@ -275,10 +293,7 @@ export class ExtensionsActivator {
 			if (this._hostExtensionsMap.has(ExtensionIdentifier.toKey(depId))) {
 				// must first wait for the dependency to activate
 				currentExtensionGetsGreenLight = false;
-				greenExtensions[ExtensionIdentifier.toKey(depId)] = {
-					id: this._hostExtensionsMap.get(ExtensionIdentifier.toKey(depId))!,
-					reason: currentActivation.reason
-				};
+				greenExtensions[ExtensionIdentifier.toKey(depId)] = this._hostExtensionsMap.get(ExtensionIdentifier.toKey(depId))!;
 				continue;
 			}
 
@@ -286,10 +301,7 @@ export class ExtensionsActivator {
 			if (depDesc) {
 				// must first wait for the dependency to activate
 				currentExtensionGetsGreenLight = false;
-				greenExtensions[ExtensionIdentifier.toKey(depId)] = {
-					id: depDesc.identifier,
-					reason: currentActivation.reason
-				};
+				greenExtensions[ExtensionIdentifier.toKey(depId)] = depDesc.identifier;
 				continue;
 			}
 
@@ -301,33 +313,33 @@ export class ExtensionsActivator {
 		}
 
 		if (currentExtensionGetsGreenLight) {
-			greenExtensions[ExtensionIdentifier.toKey(currentExtension.identifier)] = currentActivation;
+			greenExtensions[ExtensionIdentifier.toKey(currentExtension.identifier)] = currentExtensionId;
 		} else {
-			redExtensions.push(currentActivation);
+			redExtensions.push(currentExtensionId);
 		}
 	}
 
-	private _activateExtensions(extensions: ActivationIdAndReason[]): Promise<void> {
-		// console.log('_activateExtensions: ', extensions.map(p => p.id.value));
-		if (extensions.length === 0) {
+	private _activateExtensions(extensionIds: ExtensionIdentifier[], reason: ExtensionActivationReason): Promise<void> {
+		// console.log('_activateExtensions: ', extensionIds.map(p => p.value));
+		if (extensionIds.length === 0) {
 			return Promise.resolve(undefined);
 		}
 
-		extensions = extensions.filter((p) => !this._activatedExtensions.has(ExtensionIdentifier.toKey(p.id)));
-		if (extensions.length === 0) {
+		extensionIds = extensionIds.filter((p) => !this._activatedExtensions.has(ExtensionIdentifier.toKey(p)));
+		if (extensionIds.length === 0) {
 			return Promise.resolve(undefined);
 		}
 
-		const greenMap: { [id: string]: ActivationIdAndReason; } = Object.create(null),
-			red: ActivationIdAndReason[] = [];
+		const greenMap: { [id: string]: ExtensionIdentifier; } = Object.create(null),
+			red: ExtensionIdentifier[] = [];
 
-		for (let i = 0, len = extensions.length; i < len; i++) {
-			this._handleActivateRequest(extensions[i], greenMap, red);
+		for (let i = 0, len = extensionIds.length; i < len; i++) {
+			this._handleActivateRequest(extensionIds[i], greenMap, red);
 		}
 
 		// Make sure no red is also green
 		for (let i = 0, len = red.length; i < len; i++) {
-			const redExtensionKey = ExtensionIdentifier.toKey(red[i].id);
+			const redExtensionKey = ExtensionIdentifier.toKey(red[i]);
 			if (greenMap[redExtensionKey]) {
 				delete greenMap[redExtensionKey];
 			}
@@ -335,16 +347,16 @@ export class ExtensionsActivator {
 
 		const green = Object.keys(greenMap).map(id => greenMap[id]);
 
-		// console.log('greenExtensions: ', green.map(p => p.id.value));
-		// console.log('redExtensions: ', red.map(p => p.id.value));
+		// console.log('greenExtensions: ', green.map(p => p.id));
+		// console.log('redExtensions: ', red.map(p => p.id));
 
 		if (red.length === 0) {
 			// Finally reached only leafs!
-			return Promise.all(green.map((p) => this._activateExtension(p.id, p.reason))).then(_ => undefined);
+			return Promise.all(green.map((p) => this._activateExtension(p, reason))).then(_ => undefined);
 		}
 
-		return this._activateExtensions(green).then(_ => {
-			return this._activateExtensions(red);
+		return this._activateExtensions(green, reason).then(_ => {
+			return this._activateExtensions(red, reason);
 		});
 	}
 

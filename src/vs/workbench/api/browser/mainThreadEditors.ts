@@ -15,12 +15,12 @@ import { ISelection } from 'vs/editor/common/core/selection';
 import { IDecorationOptions, IDecorationRenderOptions, ILineChange } from 'vs/editor/common/editorCommon';
 import { ISingleEditOperation } from 'vs/editor/common/model';
 import { CommandsRegistry } from 'vs/platform/commands/common/commands';
-import { IEditorOptions, ITextEditorOptions, IResourceInput, EditorActivation } from 'vs/platform/editor/common/editor';
+import { IEditorOptions, ITextEditorOptions } from 'vs/platform/editor/common/editor';
 import { ServicesAccessor } from 'vs/platform/instantiation/common/instantiation';
 import { IOpenerService } from 'vs/platform/opener/common/opener';
 import { MainThreadDocumentsAndEditors } from 'vs/workbench/api/browser/mainThreadDocumentsAndEditors';
 import { MainThreadTextEditor } from 'vs/workbench/api/browser/mainThreadEditor';
-import { ExtHostContext, ExtHostEditorsShape, IApplyEditsOptions, IExtHostContext, ITextDocumentShowOptions, ITextEditorConfigurationUpdate, ITextEditorPositionData, IUndoStopOptions, MainThreadTextEditorsShape, TextEditorRevealType, IWorkspaceEditDto, reviveWorkspaceEditDto } from 'vs/workbench/api/common/extHost.protocol';
+import { ExtHostContext, ExtHostEditorsShape, IApplyEditsOptions, IExtHostContext, ITextDocumentShowOptions, ITextEditorConfigurationUpdate, ITextEditorPositionData, IUndoStopOptions, MainThreadTextEditorsShape, TextEditorRevealType, WorkspaceEditDto, reviveWorkspaceEditDto } from 'vs/workbench/api/common/extHost.protocol';
 import { EditorViewColumn, editorGroupToViewColumn, viewColumnToEditorGroup } from 'vs/workbench/api/common/shared/editor';
 import { IEditorService } from 'vs/workbench/services/editor/common/editorService';
 import { IEditorGroupsService } from 'vs/workbench/services/editor/common/editorGroupsService';
@@ -112,120 +112,112 @@ export class MainThreadTextEditors implements MainThreadTextEditorsShape {
 
 	// --- from extension host process
 
-	async $tryShowTextDocument(resource: UriComponents, options: ITextDocumentShowOptions): Promise<string | undefined> {
+	$tryShowTextDocument(resource: UriComponents, options: ITextDocumentShowOptions): Promise<string | undefined> {
 		const uri = URI.revive(resource);
 
 		const editorOptions: ITextEditorOptions = {
 			preserveFocus: options.preserveFocus,
 			pinned: options.pinned,
-			selection: options.selection,
-			// preserve pre 1.38 behaviour to not make group active when preserveFocus: true
-			// but make sure to restore the editor to fix https://github.com/microsoft/vscode/issues/79633
-			activation: options.preserveFocus ? EditorActivation.RESTORE : undefined
+			selection: options.selection
 		};
 
-		const input: IResourceInput = {
+		const input = {
 			resource: uri,
 			options: editorOptions
 		};
 
-		const editor = await this._editorService.openEditor(input, viewColumnToEditorGroup(this._editorGroupService, options.position));
-		if (!editor) {
-			return undefined;
-		}
-		return this._documentsAndEditors.findTextEditorIdFor(editor);
+		return this._editorService.openEditor(input, viewColumnToEditorGroup(this._editorGroupService, options.position)).then(editor => {
+			if (!editor) {
+				return undefined;
+			}
+			return this._documentsAndEditors.findTextEditorIdFor(editor);
+		});
 	}
 
-	async $tryShowEditor(id: string, position?: EditorViewColumn): Promise<void> {
+	$tryShowEditor(id: string, position?: EditorViewColumn): Promise<void> {
 		const mainThreadEditor = this._documentsAndEditors.getEditor(id);
 		if (mainThreadEditor) {
 			const model = mainThreadEditor.getModel();
-			await this._editorService.openEditor({
+			return this._editorService.openEditor({
 				resource: model.uri,
 				options: { preserveFocus: false }
-			}, viewColumnToEditorGroup(this._editorGroupService, position));
-			return;
+			}, viewColumnToEditorGroup(this._editorGroupService, position)).then(() => { return; });
 		}
+		return Promise.resolve();
 	}
 
-	async $tryHideEditor(id: string): Promise<void> {
+	$tryHideEditor(id: string): Promise<void> {
 		const mainThreadEditor = this._documentsAndEditors.getEditor(id);
 		if (mainThreadEditor) {
 			const editors = this._editorService.visibleControls;
 			for (let editor of editors) {
 				if (mainThreadEditor.matches(editor)) {
-					return editor.group.closeEditor(editor.input);
+					return editor.group.closeEditor(editor.input).then(() => { return; });
 				}
 			}
 		}
+		return Promise.resolve();
 	}
 
 	$trySetSelections(id: string, selections: ISelection[]): Promise<void> {
-		const editor = this._documentsAndEditors.getEditor(id);
-		if (!editor) {
+		if (!this._documentsAndEditors.getEditor(id)) {
 			return Promise.reject(disposed(`TextEditor(${id})`));
 		}
-		editor.setSelections(selections);
+		this._documentsAndEditors.getEditor(id).setSelections(selections);
 		return Promise.resolve(undefined);
 	}
 
 	$trySetDecorations(id: string, key: string, ranges: IDecorationOptions[]): Promise<void> {
 		key = `${this._instanceId}-${key}`;
-		const editor = this._documentsAndEditors.getEditor(id);
-		if (!editor) {
+		if (!this._documentsAndEditors.getEditor(id)) {
 			return Promise.reject(disposed(`TextEditor(${id})`));
 		}
-		editor.setDecorations(key, ranges);
+		this._documentsAndEditors.getEditor(id).setDecorations(key, ranges);
 		return Promise.resolve(undefined);
 	}
 
 	$trySetDecorationsFast(id: string, key: string, ranges: number[]): Promise<void> {
 		key = `${this._instanceId}-${key}`;
-		const editor = this._documentsAndEditors.getEditor(id);
-		if (!editor) {
+		if (!this._documentsAndEditors.getEditor(id)) {
 			return Promise.reject(disposed(`TextEditor(${id})`));
 		}
-		editor.setDecorationsFast(key, ranges);
+		this._documentsAndEditors.getEditor(id).setDecorationsFast(key, ranges);
 		return Promise.resolve(undefined);
 	}
 
 	$tryRevealRange(id: string, range: IRange, revealType: TextEditorRevealType): Promise<void> {
-		const editor = this._documentsAndEditors.getEditor(id);
-		if (!editor) {
+		if (!this._documentsAndEditors.getEditor(id)) {
 			return Promise.reject(disposed(`TextEditor(${id})`));
 		}
-		editor.revealRange(range, revealType);
+		this._documentsAndEditors.getEditor(id).revealRange(range, revealType);
 		return Promise.resolve();
 	}
 
 	$trySetOptions(id: string, options: ITextEditorConfigurationUpdate): Promise<void> {
-		const editor = this._documentsAndEditors.getEditor(id);
-		if (!editor) {
+		if (!this._documentsAndEditors.getEditor(id)) {
 			return Promise.reject(disposed(`TextEditor(${id})`));
 		}
-		editor.setConfiguration(options);
+		this._documentsAndEditors.getEditor(id).setConfiguration(options);
 		return Promise.resolve(undefined);
 	}
 
 	$tryApplyEdits(id: string, modelVersionId: number, edits: ISingleEditOperation[], opts: IApplyEditsOptions): Promise<boolean> {
-		const editor = this._documentsAndEditors.getEditor(id);
-		if (!editor) {
+		if (!this._documentsAndEditors.getEditor(id)) {
 			return Promise.reject(disposed(`TextEditor(${id})`));
 		}
-		return Promise.resolve(editor.applyEdits(modelVersionId, edits, opts));
+		return Promise.resolve(this._documentsAndEditors.getEditor(id).applyEdits(modelVersionId, edits, opts));
 	}
 
-	$tryApplyWorkspaceEdit(dto: IWorkspaceEditDto): Promise<boolean> {
+	$tryApplyWorkspaceEdit(dto: WorkspaceEditDto): Promise<boolean> {
 		const { edits } = reviveWorkspaceEditDto(dto);
 		return this._bulkEditService.apply({ edits }, undefined).then(() => true, err => false);
 	}
 
 	$tryInsertSnippet(id: string, template: string, ranges: readonly IRange[], opts: IUndoStopOptions): Promise<boolean> {
-		const editor = this._documentsAndEditors.getEditor(id);
-		if (!editor) {
+		if (!this._documentsAndEditors.getEditor(id)) {
 			return Promise.reject(disposed(`TextEditor(${id})`));
 		}
-		return Promise.resolve(editor.insertSnippet(template, ranges, opts));
+		return Promise.resolve(this._documentsAndEditors.getEditor(id).insertSnippet(template, ranges, opts));
 	}
 
 	$registerTextEditorDecorationType(key: string, options: IDecorationRenderOptions): void {

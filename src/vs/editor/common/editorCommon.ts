@@ -6,7 +6,7 @@
 import { IMarkdownString } from 'vs/base/common/htmlContent';
 import { IDisposable } from 'vs/base/common/lifecycle';
 import { URI, UriComponents } from 'vs/base/common/uri';
-import { ConfigurationChangedEvent, IComputedEditorOptions, IEditorOptions } from 'vs/editor/common/config/editorOptions';
+import * as editorOptions from 'vs/editor/common/config/editorOptions';
 import { IPosition, Position } from 'vs/editor/common/core/position';
 import { IRange, Range } from 'vs/editor/common/core/range';
 import { ISelection, Selection } from 'vs/editor/common/core/selection';
@@ -149,13 +149,13 @@ export interface ILineChange extends IChange {
  * @internal
  */
 export interface IConfiguration extends IDisposable {
-	onDidChange(listener: (e: ConfigurationChangedEvent) => void): IDisposable;
+	onDidChange(listener: (e: editorOptions.IConfigurationChangedEvent) => void): IDisposable;
 
-	readonly options: IComputedEditorOptions;
+	readonly editor: editorOptions.InternalEditorOptions;
 
 	setMaxLineNumber(maxLineNumber: number): void;
-	updateOptions(newOptions: IEditorOptions): void;
-	getRawOptions(): IEditorOptions;
+	updateOptions(newOptions: editorOptions.IEditorOptions): void;
+	getRawOptions(): editorOptions.IEditorOptions;
 	observeReferenceElement(dimension?: IDimension): void;
 	setIsDominatedByLongLines(isDominatedByLongLines: boolean): void;
 }
@@ -263,7 +263,7 @@ export interface IEditor {
 	/**
 	 * Update the editor's options after the editor has been created.
 	 */
-	updateOptions(newOptions: IEditorOptions): void;
+	updateOptions(newOptions: editorOptions.IEditorOptions): void;
 
 	/**
 	 * Indicates that the editor becomes visible.
@@ -389,7 +389,7 @@ export interface IEditor {
 	 * Set the selections for all the cursors of the editor.
 	 * Cursors will be removed or added, as necessary.
 	 */
-	setSelections(selections: readonly ISelection[]): void;
+	setSelections(selections: ISelection[]): void;
 
 	/**
 	 * Scroll vertically as necessary and reveal lines.

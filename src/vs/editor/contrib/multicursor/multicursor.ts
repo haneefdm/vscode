@@ -26,7 +26,6 @@ import { MenuId } from 'vs/platform/actions/common/actions';
 import { KeybindingWeight } from 'vs/platform/keybinding/common/keybindingsRegistry';
 import { overviewRulerSelectionHighlightForeground } from 'vs/platform/theme/common/colorRegistry';
 import { themeColorFromId } from 'vs/platform/theme/common/themeService';
-import { EditorOption } from 'vs/editor/common/config/editorOptions';
 
 export class InsertCursorAbove extends EditorAction {
 
@@ -73,7 +72,7 @@ export class InsertCursorAbove extends EditorAction {
 			CursorChangeReason.Explicit,
 			CursorMoveCommands.addCursorUp(context, cursors.getAll(), useLogicalLine)
 		);
-		cursors.reveal(args.source, true, RevealTarget.TopMost, ScrollType.Smooth);
+		cursors.reveal(true, RevealTarget.TopMost, ScrollType.Smooth);
 	}
 }
 
@@ -122,7 +121,7 @@ export class InsertCursorBelow extends EditorAction {
 			CursorChangeReason.Explicit,
 			CursorMoveCommands.addCursorDown(context, cursors.getAll(), useLogicalLine)
 		);
-		cursors.reveal(args.source, true, RevealTarget.BottomMost, ScrollType.Smooth);
+		cursors.reveal(true, RevealTarget.BottomMost, ScrollType.Smooth);
 	}
 }
 
@@ -351,7 +350,7 @@ export class MultiCursorSession {
 
 		const allSelections = this._editor.getSelections();
 		const lastAddedSelection = allSelections[allSelections.length - 1];
-		const nextMatch = this._editor.getModel().findNextMatch(this.searchText, lastAddedSelection.getEndPosition(), false, this.matchCase, this.wholeWord ? this._editor.getOption(EditorOption.wordSeparators) : null, false);
+		const nextMatch = this._editor.getModel().findNextMatch(this.searchText, lastAddedSelection.getEndPosition(), false, this.matchCase, this.wholeWord ? this._editor.getConfiguration().wordSeparators : null, false);
 
 		if (!nextMatch) {
 			return null;
@@ -402,7 +401,7 @@ export class MultiCursorSession {
 
 		const allSelections = this._editor.getSelections();
 		const lastAddedSelection = allSelections[allSelections.length - 1];
-		const previousMatch = this._editor.getModel().findPreviousMatch(this.searchText, lastAddedSelection.getStartPosition(), false, this.matchCase, this.wholeWord ? this._editor.getOption(EditorOption.wordSeparators) : null, false);
+		const previousMatch = this._editor.getModel().findPreviousMatch(this.searchText, lastAddedSelection.getStartPosition(), false, this.matchCase, this.wholeWord ? this._editor.getConfiguration().wordSeparators : null, false);
 
 		if (!previousMatch) {
 			return null;
@@ -417,7 +416,7 @@ export class MultiCursorSession {
 
 		this.findController.highlightFindOptions();
 
-		return this._editor.getModel().findMatches(this.searchText, true, false, this.matchCase, this.wholeWord ? this._editor.getOption(EditorOption.wordSeparators) : null, false, Constants.MAX_SAFE_SMALL_INTEGER);
+		return this._editor.getModel().findMatches(this.searchText, true, false, this.matchCase, this.wholeWord ? this._editor.getConfiguration().wordSeparators : null, false, Constants.MAX_SAFE_SMALL_INTEGER);
 	}
 }
 
@@ -594,7 +593,7 @@ export class MultiCursorSelectionController extends Disposable implements IEdito
 		// - and we're searching for a regex
 		if (findState.isRevealed && findState.searchString.length > 0 && findState.isRegex) {
 
-			matches = this._editor.getModel().findMatches(findState.searchString, true, findState.isRegex, findState.matchCase, findState.wholeWord ? this._editor.getOption(EditorOption.wordSeparators) : null, false, Constants.MAX_SAFE_SMALL_INTEGER);
+			matches = this._editor.getModel().findMatches(findState.searchString, true, findState.isRegex, findState.matchCase, findState.wholeWord ? this._editor.getConfiguration().wordSeparators : null, false, Constants.MAX_SAFE_SMALL_INTEGER);
 
 		} else {
 
@@ -809,13 +808,13 @@ export class SelectionHighlighter extends Disposable implements IEditorContribut
 	constructor(editor: ICodeEditor) {
 		super();
 		this.editor = editor;
-		this._isEnabled = editor.getOption(EditorOption.selectionHighlight);
+		this._isEnabled = editor.getConfiguration().contribInfo.selectionHighlight;
 		this.decorations = [];
 		this.updateSoon = this._register(new RunOnceScheduler(() => this._update(), 300));
 		this.state = null;
 
 		this._register(editor.onDidChangeConfiguration((e) => {
-			this._isEnabled = editor.getOption(EditorOption.selectionHighlight);
+			this._isEnabled = editor.getConfiguration().contribInfo.selectionHighlight;
 		}));
 		this._register(editor.onDidChangeCursorSelection((e: ICursorSelectionChangedEvent) => {
 
@@ -929,7 +928,7 @@ export class SelectionHighlighter extends Disposable implements IEditorContribut
 			}
 		}
 
-		return new SelectionHighlighterState(r.searchText, r.matchCase, r.wholeWord ? editor.getOption(EditorOption.wordSeparators) : null);
+		return new SelectionHighlighterState(r.searchText, r.matchCase, r.wholeWord ? editor.getConfiguration().wordSeparators : null);
 	}
 
 	private _setState(state: SelectionHighlighterState | null): void {

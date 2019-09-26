@@ -5,12 +5,16 @@
 
 import * as DOM from 'vs/base/browser/dom';
 import { Action } from 'vs/base/common/actions';
+import { INavigator } from 'vs/base/common/iterator';
 import { createKeybinding, ResolvedKeybinding } from 'vs/base/common/keyCodes';
+import { normalizeDriveLetter } from 'vs/base/common/labels';
+import { Schemas } from 'vs/base/common/network';
+import { normalize } from 'vs/base/common/path';
 import { isWindows, OS } from 'vs/base/common/platform';
 import { repeat } from 'vs/base/common/strings';
+import { URI } from 'vs/base/common/uri';
 import * as nls from 'vs/nls';
 import { IClipboardService } from 'vs/platform/clipboard/common/clipboardService';
-import { ILabelService } from 'vs/platform/label/common/label';
 import { ICommandHandler } from 'vs/platform/commands/common/commands';
 import { IConfigurationService } from 'vs/platform/configuration/common/configuration';
 import { ServicesAccessor } from 'vs/platform/instantiation/common/instantiation';
@@ -19,7 +23,7 @@ import { getSelectionKeyboardEvent, WorkbenchObjectTree } from 'vs/platform/list
 import { SearchView } from 'vs/workbench/contrib/search/browser/searchView';
 import * as Constants from 'vs/workbench/contrib/search/common/constants';
 import { IReplaceService } from 'vs/workbench/contrib/search/common/replace';
-import { FolderMatch, FileMatch, FileMatchOrMatch, FolderMatchWithResource, Match, RenderableMatch, searchMatchComparer, SearchResult } from 'vs/workbench/contrib/search/common/searchModel';
+import { BaseFolderMatch, FileMatch, FileMatchOrMatch, FolderMatch, Match, RenderableMatch, searchMatchComparer, SearchResult } from 'vs/workbench/contrib/search/common/searchModel';
 import { IEditorGroupsService } from 'vs/workbench/services/editor/common/editorGroupsService';
 import { IEditorService } from 'vs/workbench/services/editor/common/editorService';
 import { IPanelService } from 'vs/workbench/services/panel/common/panelService';
@@ -28,7 +32,6 @@ import { ISearchHistoryService } from 'vs/workbench/contrib/search/common/search
 import { IViewletService } from 'vs/workbench/services/viewlet/browser/viewlet';
 import { SearchViewlet } from 'vs/workbench/contrib/search/browser/searchViewlet';
 import { SearchPanel } from 'vs/workbench/contrib/search/browser/searchPanel';
-import { ITreeNavigator } from 'vs/base/browser/ui/tree/tree';
 
 export function isSearchViewFocused(viewletService: IViewletService, panelService: IPanelService): boolean {
 	const searchView = getSearchView(viewletService, panelService);
@@ -260,7 +263,7 @@ export class RefreshAction extends Action {
 		@IViewletService private readonly viewletService: IViewletService,
 		@IPanelService private readonly panelService: IPanelService
 	) {
-		super(id, label, 'search-action codicon-refresh');
+		super(id, label, 'search-action refresh');
 	}
 
 	get enabled(): boolean {
@@ -291,7 +294,7 @@ export class CollapseDeepestExpandedLevelAction extends Action {
 		@IViewletService private readonly viewletService: IViewletService,
 		@IPanelService private readonly panelService: IPanelService
 	) {
-		super(id, label, 'search-action codicon-collapse-all');
+		super(id, label, 'search-action collapse');
 		this.update();
 	}
 
@@ -312,7 +315,7 @@ export class CollapseDeepestExpandedLevelAction extends Action {
 			const navigator = viewer.navigate();
 			let node = navigator.first();
 			let collapseFileMatchLevel = false;
-			if (node instanceof FolderMatch) {
+			if (node instanceof BaseFolderMatch) {
 				while (node = navigator.next()) {
 					if (node instanceof Match) {
 						collapseFileMatchLevel = true;
@@ -348,7 +351,7 @@ export class ClearSearchResultsAction extends Action {
 		@IViewletService private readonly viewletService: IViewletService,
 		@IPanelService private readonly panelService: IPanelService
 	) {
-		super(id, label, 'search-action codicon-clear-all');
+		super(id, label, 'search-action clear-search-results');
 		this.update();
 	}
 
@@ -375,7 +378,7 @@ export class CancelSearchAction extends Action {
 		@IViewletService private readonly viewletService: IViewletService,
 		@IPanelService private readonly panelService: IPanelService
 	) {
-		super(id, label, 'search-action codicon-search-stop');
+		super(id, label, 'search-action cancel-search');
 		this.update();
 	}
 
@@ -447,9 +450,9 @@ export abstract class AbstractSearchAndReplaceAction extends Action {
 	}
 
 	getNextElementAfterRemoved(viewer: WorkbenchObjectTree<RenderableMatch>, element: RenderableMatch): RenderableMatch {
-		const navigator: ITreeNavigator<any> = viewer.navigate(element);
-		if (element instanceof FolderMatch) {
-			while (!!navigator.next() && !(navigator.current() instanceof FolderMatch)) { }
+		const navigator: INavigator<any> = viewer.navigate(element);
+		if (element instanceof BaseFolderMatch) {
+			while (!!navigator.next() && !(navigator.current() instanceof BaseFolderMatch)) { }
 		} else if (element instanceof FileMatch) {
 			while (!!navigator.next() && !(navigator.current() instanceof FileMatch)) { }
 		} else {
@@ -461,7 +464,7 @@ export abstract class AbstractSearchAndReplaceAction extends Action {
 	}
 
 	getPreviousElementAfterRemoved(viewer: WorkbenchObjectTree<RenderableMatch>, element: RenderableMatch): RenderableMatch {
-		const navigator: ITreeNavigator<any> = viewer.navigate(element);
+		const navigator: INavigator<any> = viewer.navigate(element);
 		let previousElement = navigator.previous();
 
 		// Hence take the previous element.
@@ -476,7 +479,7 @@ export abstract class AbstractSearchAndReplaceAction extends Action {
 
 		// If the previous element is a File or Folder, expand it and go to its last child.
 		// Spell out the two cases, would be too easy to create an infinite loop, like by adding another level...
-		if (element instanceof Match && previousElement && previousElement instanceof FolderMatch) {
+		if (element instanceof Match && previousElement && previousElement instanceof BaseFolderMatch) {
 			navigator.next();
 			viewer.expand(previousElement);
 			previousElement = navigator.previous();
@@ -500,7 +503,7 @@ export class RemoveAction extends AbstractSearchAndReplaceAction {
 		private viewer: WorkbenchObjectTree<RenderableMatch>,
 		private element: RenderableMatch
 	) {
-		super('remove', RemoveAction.LABEL, 'codicon-close');
+		super('remove', RemoveAction.LABEL, 'action-remove');
 	}
 
 	run(): Promise<any> {
@@ -540,7 +543,7 @@ export class ReplaceAllAction extends AbstractSearchAndReplaceAction {
 		private fileMatch: FileMatch,
 		@IKeybindingService keyBindingService: IKeybindingService
 	) {
-		super(Constants.ReplaceAllInFileActionId, appendKeyBindingLabel(ReplaceAllAction.LABEL, keyBindingService.lookupKeybinding(Constants.ReplaceAllInFileActionId), keyBindingService), 'codicon-replace-all');
+		super(Constants.ReplaceAllInFileActionId, appendKeyBindingLabel(ReplaceAllAction.LABEL, keyBindingService.lookupKeybinding(Constants.ReplaceAllInFileActionId), keyBindingService), 'action-replace-all');
 	}
 
 	run(): Promise<any> {
@@ -564,7 +567,7 @@ export class ReplaceAllInFolderAction extends AbstractSearchAndReplaceAction {
 	constructor(private viewer: WorkbenchObjectTree<RenderableMatch>, private folderMatch: FolderMatch,
 		@IKeybindingService keyBindingService: IKeybindingService
 	) {
-		super(Constants.ReplaceAllInFolderActionId, appendKeyBindingLabel(ReplaceAllInFolderAction.LABEL, keyBindingService.lookupKeybinding(Constants.ReplaceAllInFolderActionId), keyBindingService), 'codicon-replace-all');
+		super(Constants.ReplaceAllInFolderActionId, appendKeyBindingLabel(ReplaceAllInFolderAction.LABEL, keyBindingService.lookupKeybinding(Constants.ReplaceAllInFolderActionId), keyBindingService), 'action-replace-all');
 	}
 
 	run(): Promise<any> {
@@ -587,7 +590,7 @@ export class ReplaceAction extends AbstractSearchAndReplaceAction {
 		@IKeybindingService keyBindingService: IKeybindingService,
 		@IEditorService private readonly editorService: IEditorService,
 		@IConfigurationService private readonly configurationService: IConfigurationService) {
-		super(Constants.ReplaceActionId, appendKeyBindingLabel(ReplaceAction.LABEL, keyBindingService.lookupKeybinding(Constants.ReplaceActionId), keyBindingService), 'codicon-replace');
+		super(Constants.ReplaceActionId, appendKeyBindingLabel(ReplaceAction.LABEL, keyBindingService.lookupKeybinding(Constants.ReplaceActionId), keyBindingService), 'action-replace');
 	}
 
 	run(): Promise<any> {
@@ -613,7 +616,7 @@ export class ReplaceAction extends AbstractSearchAndReplaceAction {
 	}
 
 	private getElementToFocusAfterReplace(): Match {
-		const navigator: ITreeNavigator<any> = this.viewer.navigate();
+		const navigator: INavigator<any> = this.viewer.navigate();
 		let fileMatched = false;
 		let elementToFocus: any = null;
 		do {
@@ -651,25 +654,28 @@ export class ReplaceAction extends AbstractSearchAndReplaceAction {
 	}
 
 	private hasSameParent(element: RenderableMatch): boolean {
-		return element && element instanceof Match && element.parent().resource === this.element.parent().resource;
+		return element && element instanceof Match && element.parent().resource() === this.element.parent().resource();
 	}
 
 	private hasToOpenFile(): boolean {
 		const activeEditor = this.editorService.activeEditor;
 		const file = activeEditor ? activeEditor.getResource() : undefined;
 		if (file) {
-			return file.toString() === this.element.parent().resource.toString();
+			return file.toString() === this.element.parent().resource().toString();
 		}
 		return false;
 	}
 }
 
-export const copyPathCommand: ICommandHandler = async (accessor, fileMatch: FileMatch | FolderMatchWithResource) => {
-	const clipboardService = accessor.get(IClipboardService);
-	const labelService = accessor.get(ILabelService);
+function uriToClipboardString(resource: URI): string {
+	return resource.scheme === Schemas.file ? normalize(normalizeDriveLetter(resource.fsPath)) : resource.toString();
+}
 
-	const text = labelService.getUriLabel(fileMatch.resource, { noPrefix: true });
-	await clipboardService.writeText(text);
+export const copyPathCommand: ICommandHandler = (accessor, fileMatch: FileMatch | FolderMatch) => {
+	const clipboardService = accessor.get(IClipboardService);
+
+	const text = uriToClipboardString(fileMatch.resource());
+	clipboardService.writeText(text);
 };
 
 function matchToString(match: Match, indent = 0): string {
@@ -700,26 +706,25 @@ function matchToString(match: Match, indent = 0): string {
 }
 
 const lineDelimiter = isWindows ? '\r\n' : '\n';
-function fileMatchToString(fileMatch: FileMatch, maxMatches: number, labelService: ILabelService): { text: string, count: number } {
+function fileMatchToString(fileMatch: FileMatch, maxMatches: number): { text: string, count: number } {
 	const matchTextRows = fileMatch.matches()
 		.sort(searchMatchComparer)
 		.slice(0, maxMatches)
 		.map(match => matchToString(match, 2));
-	const uriString = labelService.getUriLabel(fileMatch.resource, { noPrefix: true });
 	return {
-		text: `${uriString}${lineDelimiter}${matchTextRows.join(lineDelimiter)}`,
+		text: `${uriToClipboardString(fileMatch.resource())}${lineDelimiter}${matchTextRows.join(lineDelimiter)}`,
 		count: matchTextRows.length
 	};
 }
 
-function folderMatchToString(folderMatch: FolderMatchWithResource | FolderMatch, maxMatches: number, labelService: ILabelService): { text: string, count: number } {
+function folderMatchToString(folderMatch: FolderMatch | BaseFolderMatch, maxMatches: number): { text: string, count: number } {
 	const fileResults: string[] = [];
 	let numMatches = 0;
 
 	const matches = folderMatch.matches().sort(searchMatchComparer);
 
 	for (let i = 0; i < folderMatch.fileCount() && numMatches < maxMatches; i++) {
-		const fileResult = fileMatchToString(matches[i], maxMatches - numMatches, labelService);
+		const fileResult = fileMatchToString(matches[i], maxMatches - numMatches);
 		numMatches += fileResult.count;
 		fileResults.push(fileResult.text);
 	}
@@ -731,30 +736,29 @@ function folderMatchToString(folderMatch: FolderMatchWithResource | FolderMatch,
 }
 
 const maxClipboardMatches = 1e4;
-export const copyMatchCommand: ICommandHandler = async (accessor, match: RenderableMatch) => {
+export const copyMatchCommand: ICommandHandler = (accessor, match: RenderableMatch) => {
 	const clipboardService = accessor.get(IClipboardService);
-	const labelService = accessor.get(ILabelService);
 
 	let text: string | undefined;
 	if (match instanceof Match) {
 		text = matchToString(match);
 	} else if (match instanceof FileMatch) {
-		text = fileMatchToString(match, maxClipboardMatches, labelService).text;
-	} else if (match instanceof FolderMatch) {
-		text = folderMatchToString(match, maxClipboardMatches, labelService).text;
+		text = fileMatchToString(match, maxClipboardMatches).text;
+	} else if (match instanceof BaseFolderMatch) {
+		text = folderMatchToString(match, maxClipboardMatches).text;
 	}
 
 	if (text) {
-		await clipboardService.writeText(text);
+		clipboardService.writeText(text);
 	}
 };
 
-function allFolderMatchesToString(folderMatches: Array<FolderMatchWithResource | FolderMatch>, maxMatches: number, labelService: ILabelService): string {
+function allFolderMatchesToString(folderMatches: Array<FolderMatch | BaseFolderMatch>, maxMatches: number): string {
 	const folderResults: string[] = [];
 	let numMatches = 0;
 	folderMatches = folderMatches.sort(searchMatchComparer);
 	for (let i = 0; i < folderMatches.length && numMatches < maxMatches; i++) {
-		const folderResult = folderMatchToString(folderMatches[i], maxMatches - numMatches, labelService);
+		const folderResult = folderMatchToString(folderMatches[i], maxMatches - numMatches);
 		if (folderResult.count) {
 			numMatches += folderResult.count;
 			folderResults.push(folderResult.text);
@@ -764,18 +768,17 @@ function allFolderMatchesToString(folderMatches: Array<FolderMatchWithResource |
 	return folderResults.join(lineDelimiter + lineDelimiter);
 }
 
-export const copyAllCommand: ICommandHandler = async (accessor) => {
+export const copyAllCommand: ICommandHandler = accessor => {
 	const viewletService = accessor.get(IViewletService);
 	const panelService = accessor.get(IPanelService);
 	const clipboardService = accessor.get(IClipboardService);
-	const labelService = accessor.get(ILabelService);
 
 	const searchView = getSearchView(viewletService, panelService);
 	if (searchView) {
 		const root = searchView.searchResult;
 
-		const text = allFolderMatchesToString(root.folderMatches(), maxClipboardMatches, labelService);
-		await clipboardService.writeText(text);
+		const text = allFolderMatchesToString(root.folderMatches(), maxClipboardMatches);
+		clipboardService.writeText(text);
 	}
 };
 

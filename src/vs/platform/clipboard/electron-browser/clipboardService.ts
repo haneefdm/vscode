@@ -12,18 +12,14 @@ export class ClipboardService implements IClipboardService {
 
 	private static FILE_FORMAT = 'code/file-list'; // Clipboard format for files
 
-	_serviceBrand: undefined;
+	_serviceBrand: any;
 
-	async writeText(text: string, type?: 'selection' | 'clipboard'): Promise<void> {
+	writeText(text: string, type?: string): void {
 		clipboard.writeText(text, type);
 	}
 
-	async readText(type?: 'selection' | 'clipboard'): Promise<string> {
+	readText(type?: string): string {
 		return clipboard.readText(type);
-	}
-
-	readTextSync(): string {
-		return clipboard.readText();
 	}
 
 	readFindText(): string {

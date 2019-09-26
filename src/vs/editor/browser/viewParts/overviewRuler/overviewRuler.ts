@@ -5,7 +5,7 @@
 
 import { FastDomNode, createFastDomNode } from 'vs/base/browser/fastDomNode';
 import { IOverviewRuler } from 'vs/editor/browser/editorBrowser';
-import { OverviewRulerPosition, EditorOption } from 'vs/editor/common/config/editorOptions';
+import { OverviewRulerPosition } from 'vs/editor/common/config/editorOptions';
 import { ColorZone, OverviewRulerZone, OverviewZoneManager } from 'vs/editor/common/view/overviewZoneManager';
 import { ViewContext } from 'vs/editor/common/view/viewContext';
 import * as viewEvents from 'vs/editor/common/view/viewEvents';
@@ -20,7 +20,6 @@ export class OverviewRuler extends ViewEventHandler implements IOverviewRuler {
 	constructor(context: ViewContext, cssClassName: string) {
 		super();
 		this._context = context;
-		const options = this._context.configuration.options;
 
 		this._domNode = createFastDomNode(document.createElement('canvas'));
 		this._domNode.setClassName(cssClassName);
@@ -31,9 +30,9 @@ export class OverviewRuler extends ViewEventHandler implements IOverviewRuler {
 		this._zoneManager.setDOMWidth(0);
 		this._zoneManager.setDOMHeight(0);
 		this._zoneManager.setOuterHeight(this._context.viewLayout.getScrollHeight());
-		this._zoneManager.setLineHeight(options.get(EditorOption.lineHeight));
+		this._zoneManager.setLineHeight(this._context.configuration.editor.lineHeight);
 
-		this._zoneManager.setPixelRatio(options.get(EditorOption.pixelRatio));
+		this._zoneManager.setPixelRatio(this._context.configuration.editor.pixelRatio);
 
 		this._context.addEventHandler(this);
 	}
@@ -46,15 +45,13 @@ export class OverviewRuler extends ViewEventHandler implements IOverviewRuler {
 	// ---- begin view event handlers
 
 	public onConfigurationChanged(e: viewEvents.ViewConfigurationChangedEvent): boolean {
-		const options = this._context.configuration.options;
-
-		if (e.hasChanged(EditorOption.lineHeight)) {
-			this._zoneManager.setLineHeight(options.get(EditorOption.lineHeight));
+		if (e.lineHeight) {
+			this._zoneManager.setLineHeight(this._context.configuration.editor.lineHeight);
 			this._render();
 		}
 
-		if (e.hasChanged(EditorOption.pixelRatio)) {
-			this._zoneManager.setPixelRatio(options.get(EditorOption.pixelRatio));
+		if (e.pixelRatio) {
+			this._zoneManager.setPixelRatio(this._context.configuration.editor.pixelRatio);
 			this._domNode.setWidth(this._zoneManager.getDOMWidth());
 			this._domNode.setHeight(this._zoneManager.getDOMHeight());
 			this._domNode.domNode.width = this._zoneManager.getCanvasWidth();

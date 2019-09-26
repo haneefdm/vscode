@@ -148,9 +148,8 @@ function getMassagedTopLevelDeclarationText(sourceFile, declaration, importName,
             }
         });
     }
-    result = result.replace(/export default /g, 'export ');
-    result = result.replace(/export declare /g, 'export ');
-    result = result.replace(/declare /g, '');
+    result = result.replace(/export default/g, 'export');
+    result = result.replace(/export declare/g, 'export');
     if (declaration.kind === ts.SyntaxKind.EnumDeclaration) {
         result = result.replace(/const enum/, 'enum');
         enums.push(result);
@@ -307,8 +306,8 @@ function generateDeclarationFile(recipe, sourceFileGetter) {
     let usageImports = [];
     let usage = [];
     let failed = false;
-    usage.push(`var a: any;`);
-    usage.push(`var b: any;`);
+    usage.push(`var a;`);
+    usage.push(`var b;`);
     const generateUsageImport = (moduleId) => {
         let importName = 'm' + (++usageCounter);
         usageImports.push(`import * as ${importName} from './${moduleId.replace(/\.d\.ts$/, '')}';`);

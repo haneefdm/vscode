@@ -4,14 +4,12 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Emitter } from 'vs/base/common/event';
-import { DisposableStore } from 'vs/base/common/lifecycle';
-import { IExtensionDescription } from 'vs/platform/extensions/common/extensions';
-import { ExtHostTextEditor } from 'vs/workbench/api/common/extHostTextEditor';
-import { ExtHostEditors } from 'vs/workbench/api/common/extHostTextEditors';
 import * as vscode from 'vscode';
-import { ExtHostEditorInsetsShape, MainThreadEditorInsetsShape } from './extHost.protocol';
-import { asWebviewUri, WebviewInitData } from 'vs/workbench/api/common/shared/webview';
-import { generateUuid } from 'vs/base/common/uuid';
+import { MainThreadEditorInsetsShape, ExtHostEditorInsetsShape } from './extHost.protocol';
+import { ExtHostEditors } from 'vs/workbench/api/common/extHostTextEditors';
+import { DisposableStore } from 'vs/base/common/lifecycle';
+import { ExtHostTextEditor } from 'vs/workbench/api/common/extHostTextEditor';
+import { IExtensionDescription } from 'vs/platform/extensions/common/extensions';
 
 export class ExtHostEditorInsets implements ExtHostEditorInsetsShape {
 
@@ -21,8 +19,7 @@ export class ExtHostEditorInsets implements ExtHostEditorInsetsShape {
 
 	constructor(
 		private readonly _proxy: MainThreadEditorInsetsShape,
-		private readonly _editors: ExtHostEditors,
-		private readonly _initData: WebviewInitData
+		private readonly _editors: ExtHostEditors
 	) {
 
 		// dispose editor inset whenever the hosting editor goes away
@@ -61,16 +58,11 @@ export class ExtHostEditorInsets implements ExtHostEditorInsetsShape {
 
 		const webview = new class implements vscode.Webview {
 
-			private readonly _uuid = generateUuid();
 			private _html: string = '';
-			private _options: vscode.WebviewOptions = Object.create(null);
+			private _options: vscode.WebviewOptions;
 
-			asWebviewUri(resource: vscode.Uri): vscode.Uri {
-				return asWebviewUri(that._initData, this._uuid, resource);
-			}
-
-			get cspSource(): string {
-				return that._initData.webviewCspSource;
+			get resourceRoot(): Promise<string> {
+				return that._proxy.$getResourceRoot(handle);
 			}
 
 			set options(value: vscode.WebviewOptions) {

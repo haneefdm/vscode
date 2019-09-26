@@ -24,7 +24,7 @@ interface CurrentChord {
 }
 
 export abstract class AbstractKeybindingService extends Disposable implements IKeybindingService {
-	public _serviceBrand: undefined;
+	public _serviceBrand: any;
 
 	protected readonly _onDidUpdateKeybindings: Emitter<IKeybindingEvent> = this._register(new Emitter<IKeybindingEvent>());
 	get onDidUpdateKeybindings(): Event<IKeybindingEvent> {

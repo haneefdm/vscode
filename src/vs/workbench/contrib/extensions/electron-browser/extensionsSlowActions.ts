@@ -4,25 +4,25 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as os from 'os';
-import product from 'vs/platform/product/common/product';
+import pkg from 'vs/platform/product/node/package';
 import { Action } from 'vs/base/common/actions';
 import { IExtensionDescription } from 'vs/platform/extensions/common/extensions';
 import { URI } from 'vs/base/common/uri';
 import { IExtensionHostProfile } from 'vs/workbench/services/extensions/common/extensions';
 import { IInstantiationService, ServicesAccessor } from 'vs/platform/instantiation/common/instantiation';
 import { localize } from 'vs/nls';
+import { IRequestService } from 'vs/platform/request/node/request';
 import { CancellationToken } from 'vs/base/common/cancellation';
-import { IRequestService, asText } from 'vs/platform/request/common/request';
+import { asText } from 'vs/base/node/request';
 import { join } from 'vs/base/common/path';
 import { onUnexpectedError } from 'vs/base/common/errors';
 import { IDialogService } from 'vs/platform/dialogs/common/dialogs';
 import Severity from 'vs/base/common/severity';
-import { IOpenerService } from 'vs/platform/opener/common/opener';
 
 abstract class RepoInfo {
-	abstract get base(): string;
-	abstract get owner(): string;
-	abstract get repo(): string;
+	readonly base: string;
+	readonly owner: string;
+	readonly repo: string;
 
 	static fromExtension(desc: IExtensionDescription): RepoInfo | undefined {
 
@@ -118,7 +118,6 @@ class ReportExtensionSlowAction extends Action {
 		readonly repoInfo: RepoInfo,
 		readonly profile: IExtensionHostProfile,
 		@IDialogService private readonly _dialogService: IDialogService,
-		@IOpenerService private readonly _openerService: IOpenerService
 	) {
 		super('report.slow', localize('cmd.report', "Report Issue"));
 	}
@@ -139,10 +138,10 @@ class ReportExtensionSlowAction extends Action {
 - Extension Name: \`${this.extension.name}\`
 - Extension Version: \`${this.extension.version}\`
 - OS Version: \`${osVersion}\`
-- VSCode version: \`${product.version}\`\n\n${message}`);
+- VSCode version: \`${pkg.version}\`\n\n${message}`);
 
 		const url = `${this.repoInfo.base}/${this.repoInfo.owner}/${this.repoInfo.repo}/issues/new/?body=${body}&title=${title}`;
-		this._openerService.open(URI.parse(url));
+		window.open(url);
 
 		this._dialogService.show(
 			Severity.Info,
@@ -160,7 +159,6 @@ class ShowExtensionSlowAction extends Action {
 		readonly repoInfo: RepoInfo,
 		readonly profile: IExtensionHostProfile,
 		@IDialogService private readonly _dialogService: IDialogService,
-		@IOpenerService private readonly _openerService: IOpenerService
 	) {
 		super('show.slow', localize('cmd.show', "Show Issues"));
 	}
@@ -175,7 +173,7 @@ class ShowExtensionSlowAction extends Action {
 
 		// show issues
 		const url = `${this.repoInfo.base}/${this.repoInfo.owner}/${this.repoInfo.repo}/issues?utf8=✓&q=is%3Aissue+state%3Aopen+%22Extension+causes+high+cpu+load%22`;
-		this._openerService.open(URI.parse(url));
+		window.open(url);
 
 		this._dialogService.show(
 			Severity.Info,

@@ -7,7 +7,11 @@ import { createDecorator } from 'vs/platform/instantiation/common/instantiation'
 import { Event, Emitter } from 'vs/base/common/event';
 import { Disposable } from 'vs/base/common/lifecycle';
 import { isUndefinedOrNull } from 'vs/base/common/types';
-import { IWorkspaceInitializationPayload } from 'vs/platform/workspaces/common/workspaces';
+import { IUpdateRequest, IStorageDatabase } from 'vs/base/parts/storage/common/storage';
+import { serializableToMap, mapToSerializable } from 'vs/base/common/map';
+import { VSBuffer } from 'vs/base/common/buffer';
+import { URI } from 'vs/base/common/uri';
+import { IFileService } from 'vs/platform/files/common/files';
 
 export const IStorageService = createDecorator<IStorageService>('storageService');
 
@@ -22,7 +26,7 @@ export interface IWillSaveStateEvent {
 
 export interface IStorageService {
 
-	_serviceBrand: undefined;
+	_serviceBrand: any;
 
 	/**
 	 * Emitted whenever data is updated or deleted.
@@ -37,10 +41,6 @@ export interface IStorageService {
 	 * The will save state event allows to optionally ask for the reason of
 	 * saving the state, e.g. to find out if the state is saved due to a
 	 * shutdown.
-	 *
-	 * Note: this event may be fired many times, not only on shutdown to prevent
-	 * loss of state in situations where the shutdown is not sufficient to
-	 * persist the data properly.
 	 */
 	readonly onWillSaveState: Event<IWillSaveStateEvent>;
 
@@ -97,11 +97,6 @@ export interface IStorageService {
 	 * Log the contents of the storage to the console.
 	 */
 	logStorage(): void;
-
-	/**
-	 * Migrate the storage contents to another workspace.
-	 */
-	migrate(toWorkspace: IWorkspaceInitializationPayload): Promise<void>;
 }
 
 export const enum StorageScope {
@@ -124,10 +119,10 @@ export interface IWorkspaceStorageChangeEvent {
 
 export class InMemoryStorageService extends Disposable implements IStorageService {
 
-	_serviceBrand: undefined;
+	_serviceBrand = undefined;
 
 	private readonly _onDidChangeStorage: Emitter<IWorkspaceStorageChangeEvent> = this._register(new Emitter<IWorkspaceStorageChangeEvent>());
-	readonly onDidChangeStorage: Event<IWorkspaceStorageChangeEvent> = this._onDidChangeStorage.event;
+	get onDidChangeStorage(): Event<IWorkspaceStorageChangeEvent> { return this._onDidChangeStorage.event; }
 
 	readonly onWillSaveState = Event.None;
 
@@ -211,9 +206,63 @@ export class InMemoryStorageService extends Disposable implements IStorageServic
 	logStorage(): void {
 		logStorage(this.globalCache, this.workspaceCache, 'inMemory', 'inMemory');
 	}
+}
 
-	async migrate(toWorkspace: IWorkspaceInitializationPayload): Promise<void> {
-		// not supported
+export class FileStorageDatabase extends Disposable implements IStorageDatabase {
+
+	readonly onDidChangeItemsExternal = Event.None; // TODO@Ben implement global UI storage events
+
+	private cache: Map<string, string> | undefined;
+
+	private pendingUpdate: Promise<void> = Promise.resolve();
+
+	constructor(
+		private readonly file: URI,
+		private readonly fileService: IFileService
+	) {
+		super();
+	}
+
+	async getItems(): Promise<Map<string, string>> {
+		if (!this.cache) {
+			try {
+				this.cache = await this.doGetItemsFromFile();
+			} catch (error) {
+				this.cache = new Map();
+			}
+		}
+
+		return this.cache;
+	}
+
+	private async doGetItemsFromFile(): Promise<Map<string, string>> {
+		await this.pendingUpdate;
+
+		const itemsRaw = await this.fileService.readFile(this.file);
+
+		return serializableToMap(JSON.parse(itemsRaw.value.toString()));
+	}
+
+	async updateItems(request: IUpdateRequest): Promise<void> {
+		const items = await this.getItems();
+
+		if (request.insert) {
+			request.insert.forEach((value, key) => items.set(key, value));
+		}
+
+		if (request.delete) {
+			request.delete.forEach(key => items.delete(key));
+		}
+
+		await this.pendingUpdate;
+
+		this.pendingUpdate = this.fileService.writeFile(this.file, VSBuffer.fromString(JSON.stringify(mapToSerializable(items)))).then();
+
+		return this.pendingUpdate;
+	}
+
+	close(): Promise<void> {
+		return this.pendingUpdate;
 	}
 }
 

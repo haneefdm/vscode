@@ -26,13 +26,15 @@ import { ResolvedKeybindingItem } from 'vs/platform/keybinding/common/resolvedKe
 import { INotificationService } from 'vs/platform/notification/common/notification';
 import { Registry } from 'vs/platform/registry/common/platform';
 import { ITelemetryService } from 'vs/platform/telemetry/common/telemetry';
+import { keybindingsTelemetry } from 'vs/platform/telemetry/common/telemetryUtils';
 import { ExtensionMessageCollector, ExtensionsRegistry } from 'vs/workbench/services/extensions/common/extensionsRegistry';
 import { IUserKeybindingItem, KeybindingIO, OutputBuilder } from 'vs/workbench/services/keybinding/common/keybindingIO';
 import { IKeyboardMapper } from 'vs/workbench/services/keybinding/common/keyboardMapper';
-import { IHostService } from 'vs/workbench/services/host/browser/host';
+import { IWindowService } from 'vs/platform/windows/common/windows';
 import { IExtensionService } from 'vs/workbench/services/extensions/common/extensions';
 import { MenuRegistry } from 'vs/platform/actions/common/actions';
 import { registerSingleton } from 'vs/platform/instantiation/common/extensions';
+// tslint:disable-next-line: import-patterns
 import { commandsExtensionPoint } from 'vs/workbench/api/common/menusExtensionPoint';
 import { Disposable } from 'vs/base/common/lifecycle';
 import { RunOnceScheduler } from 'vs/base/common/async';
@@ -43,7 +45,7 @@ import * as objects from 'vs/base/common/objects';
 import { IKeymapService } from 'vs/workbench/services/keybinding/common/keymapInfo';
 import { getDispatchConfig } from 'vs/workbench/services/keybinding/common/dispatchConfig';
 import { isArray } from 'vs/base/common/types';
-import { INavigatorWithKeyboard } from 'vs/workbench/services/keybinding/browser/navigatorKeyboard';
+import { INavigatorWithKeyboard } from 'vs/workbench/services/keybinding/common/navigatorKeyboard';
 import { ScanCodeUtils, IMMUTABLE_CODE_TO_KEY_CODE } from 'vs/base/common/scanCode';
 
 interface ContributedKeyBinding {
@@ -154,7 +156,7 @@ export class WorkbenchKeybindingService extends AbstractKeybindingService {
 		@INotificationService notificationService: INotificationService,
 		@IEnvironmentService environmentService: IEnvironmentService,
 		@IConfigurationService configurationService: IConfigurationService,
-		@IHostService private readonly hostService: IHostService,
+		@IWindowService private readonly windowService: IWindowService,
 		@IExtensionService extensionService: IExtensionService,
 		@IFileService fileService: IFileService,
 		@IKeymapService private readonly keymapService: IKeymapService
@@ -190,11 +192,12 @@ export class WorkbenchKeybindingService extends AbstractKeybindingService {
 			}
 		});
 		this._register(this.userKeybindings.onDidChange(() => {
-			type CustomKeybindingsChangedClassification = {
-				keyCount: { classification: 'SystemMetaData', purpose: 'FeatureInsight', isMeasurement: true }
-			};
-
-			this._telemetryService.publicLog2<{ keyCount: number }, CustomKeybindingsChangedClassification>('customKeybindingsChanged', {
+			/* __GDPR__
+				"customKeybindingsChanged" : {
+					"keyCount" : { "classification": "SystemMetaData", "purpose": "FeatureInsight", "isMeasurement": true }
+				}
+			*/
+			this._telemetryService.publicLog('customKeybindingsChanged', {
 				keyCount: this.userKeybindings.keybindings.length
 			});
 			this.updateResolver({
@@ -225,6 +228,7 @@ export class WorkbenchKeybindingService extends AbstractKeybindingService {
 			}
 		}));
 
+		keybindingsTelemetry(telemetryService, this);
 		let data = this.keymapService.getCurrentKeyboardLayout();
 		/* __GDPR__
 			"keyboardLayout" : {
@@ -291,13 +295,13 @@ export class WorkbenchKeybindingService extends AbstractKeybindingService {
 		// it is possible that the document has lost focus, but the
 		// window is still focused, e.g. when a <webview> element
 		// has focus
-		return this.hostService.hasFocus;
+		return this.windowService.hasFocus;
 	}
 
 	private _resolveKeybindingItems(items: IKeybindingItem[], isDefault: boolean): ResolvedKeybindingItem[] {
 		let result: ResolvedKeybindingItem[] = [], resultLen = 0;
 		for (const item of items) {
-			const when = item.when || undefined;
+			const when = (item.when ? item.when.normalize() : undefined);
 			const keybinding = item.keybinding;
 			if (!keybinding) {
 				// This might be a removal keybinding item in user settings => accept it
@@ -320,7 +324,7 @@ export class WorkbenchKeybindingService extends AbstractKeybindingService {
 	private _resolveUserKeybindingItems(items: IUserKeybindingItem[], isDefault: boolean): ResolvedKeybindingItem[] {
 		let result: ResolvedKeybindingItem[] = [], resultLen = 0;
 		for (const item of items) {
-			const when = item.when || undefined;
+			const when = (item.when ? item.when.normalize() : undefined);
 			const parts = item.parts;
 			if (parts.length === 0) {
 				// This might be a removal keybinding item in user settings => accept it
@@ -600,12 +604,10 @@ let commandsSchemas: IJSONSchema[] = [];
 let commandsEnum: string[] = [];
 let commandsEnumDescriptions: (string | undefined)[] = [];
 let schema: IJSONSchema = {
-	id: schemaId,
-	type: 'array',
-	title: nls.localize('keybindings.json.title', "Keybindings configuration"),
-	allowTrailingCommas: true,
-	allowComments: true,
-	definitions: {
+	'id': schemaId,
+	'type': 'array',
+	'title': nls.localize('keybindings.json.title', "Keybindings configuration"),
+	'definitions': {
 		'editorGroupsSchema': {
 			'type': 'array',
 			'items': {
@@ -623,7 +625,7 @@ let schema: IJSONSchema = {
 			}
 		}
 	},
-	items: {
+	'items': {
 		'required': ['key'],
 		'type': 'object',
 		'defaultSnippets': [{ 'body': { 'key': '$1', 'command': '$2', 'when': '$3' } }],
@@ -724,6 +726,7 @@ const keyboardConfiguration: IConfigurationNode = {
 			'markdownDescription': nls.localize('dispatch', "Controls the dispatching logic for key presses to use either `code` (recommended) or `keyCode`."),
 			'included': OS === OperatingSystem.Macintosh || OS === OperatingSystem.Linux
 		}
+		// no touch bar support
 	}
 };
 

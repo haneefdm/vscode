@@ -23,7 +23,6 @@ import { MoveLinesCommand } from 'vs/editor/contrib/linesOperations/moveLinesCom
 import { SortLinesCommand } from 'vs/editor/contrib/linesOperations/sortLinesCommand';
 import { MenuId } from 'vs/platform/actions/common/actions';
 import { KeybindingWeight } from 'vs/platform/keybinding/common/keybindingsRegistry';
-import { EditorOption } from 'vs/editor/common/config/editorOptions';
 
 // copy lines
 
@@ -112,7 +111,7 @@ abstract class AbstractMoveLinesAction extends EditorAction {
 
 		let commands: ICommand[] = [];
 		let selections = editor.getSelections() || [];
-		const autoIndent = editor.getOption(EditorOption.autoIndent);
+		let autoIndent = editor.getConfiguration().autoIndent;
 
 		for (const selection of selections) {
 			commands.push(new MoveLinesCommand(selection, this.down, autoIndent));
@@ -582,7 +581,7 @@ export class DeleteAllLeftAction extends AbstractDeleteAllToBoundaryAction {
 					return new Range(selection.startLineNumber, 1, selection.startLineNumber, selection.startColumn);
 				}
 			} else {
-				return new Range(selection.startLineNumber, 1, selection.endLineNumber, selection.endColumn);
+				return selection;
 			}
 		});
 
@@ -887,7 +886,7 @@ export abstract class AbstractCaseAction extends EditorAction {
 			return;
 		}
 
-		let wordSeparators = editor.getOption(EditorOption.wordSeparators);
+		let wordSeparators = editor.getConfiguration().wordSeparators;
 
 		let commands: ICommand[] = [];
 

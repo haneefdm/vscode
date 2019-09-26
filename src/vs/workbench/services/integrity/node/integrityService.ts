@@ -10,11 +10,10 @@ import Severity from 'vs/base/common/severity';
 import { URI } from 'vs/base/common/uri';
 import { ChecksumPair, IIntegrityService, IntegrityTestResult } from 'vs/workbench/services/integrity/common/integrity';
 import { ILifecycleService, LifecyclePhase } from 'vs/platform/lifecycle/common/lifecycle';
-import product from 'vs/platform/product/common/product';
+import product from 'vs/platform/product/node/product';
 import { INotificationService } from 'vs/platform/notification/common/notification';
 import { IStorageService, StorageScope } from 'vs/platform/storage/common/storage';
 import { registerSingleton } from 'vs/platform/instantiation/common/extensions';
-import { IOpenerService } from 'vs/platform/opener/common/opener';
 
 interface IStorageData {
 	dontShowPrompt: boolean;
@@ -56,7 +55,7 @@ class IntegrityStorage {
 
 export class IntegrityServiceImpl implements IIntegrityService {
 
-	_serviceBrand: undefined;
+	_serviceBrand: any;
 
 	private _storage: IntegrityStorage;
 	private _isPurePromise: Promise<IntegrityTestResult>;
@@ -64,8 +63,7 @@ export class IntegrityServiceImpl implements IIntegrityService {
 	constructor(
 		@INotificationService private readonly notificationService: INotificationService,
 		@IStorageService storageService: IStorageService,
-		@ILifecycleService private readonly lifecycleService: ILifecycleService,
-		@IOpenerService private readonly openerService: IOpenerService
+		@ILifecycleService private readonly lifecycleService: ILifecycleService
 	) {
 		this._storage = new IntegrityStorage(storageService);
 
@@ -86,32 +84,22 @@ export class IntegrityServiceImpl implements IIntegrityService {
 			return; // Do not prompt
 		}
 
-		const checksumFailMoreInfoUrl = product.checksumFailMoreInfoUrl;
-		const message = nls.localize('integrity.prompt', "Your {0} installation appears to be corrupt. Please reinstall.", product.nameShort);
-		if (checksumFailMoreInfoUrl) {
-			this.notificationService.prompt(
-				Severity.Warning,
-				message,
-				[
-					{
-						label: nls.localize('integrity.moreInformation', "More Information"),
-						run: () => this.openerService.open(URI.parse(checksumFailMoreInfoUrl))
-					},
-					{
-						label: nls.localize('integrity.dontShowAgain', "Don't Show Again"),
-						isSecondary: true,
-						run: () => this._storage.set({ dontShowPrompt: true, commit: product.commit })
-					}
-				],
-				{ sticky: true }
-			);
-		} else {
-			this.notificationService.notify({
-				severity: Severity.Warning,
-				message,
-				sticky: true
-			});
-		}
+		this.notificationService.prompt(
+			Severity.Warning,
+			nls.localize('integrity.prompt', "Your {0} installation appears to be corrupt. Please reinstall.", product.nameShort),
+			[
+				{
+					label: nls.localize('integrity.moreInformation', "More Information"),
+					run: () => window.open(URI.parse(product.checksumFailMoreInfoUrl).toString(true))
+				},
+				{
+					label: nls.localize('integrity.dontShowAgain', "Don't Show Again"),
+					isSecondary: true,
+					run: () => this._storage.set({ dontShowPrompt: true, commit: product.commit })
+				}
+			],
+			{ sticky: true }
+		);
 	}
 
 	isPure(): Promise<IntegrityTestResult> {

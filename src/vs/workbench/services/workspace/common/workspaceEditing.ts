@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createDecorator } from 'vs/platform/instantiation/common/instantiation';
+import { createDecorator, ServiceIdentifier } from 'vs/platform/instantiation/common/instantiation';
 import { IWorkspaceIdentifier, IWorkspaceFolderCreationData } from 'vs/platform/workspaces/common/workspaces';
 import { URI } from 'vs/base/common/uri';
 
@@ -11,7 +11,7 @@ export const IWorkspaceEditingService = createDecorator<IWorkspaceEditingService
 
 export interface IWorkspaceEditingService {
 
-	_serviceBrand: undefined;
+	_serviceBrand: ServiceIdentifier<any>;
 
 	/**
 	 * Add folders to the existing workspace.

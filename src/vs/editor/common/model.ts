@@ -14,7 +14,6 @@ import { IModelContentChange, IModelContentChangedEvent, IModelDecorationsChange
 import { SearchData } from 'vs/editor/common/model/textModelSearch';
 import { LanguageId, LanguageIdentifier, FormattingOptions } from 'vs/editor/common/modes';
 import { ThemeColor } from 'vs/platform/theme/common/themeService';
-import { MultilineTokens } from 'vs/editor/common/model/tokensStore';
 
 /**
  * Vertical Lane in the overview ruler of the editor.
@@ -781,15 +780,10 @@ export interface ITextModel {
 	findPreviousMatch(searchString: string, searchStart: IPosition, isRegex: boolean, matchCase: boolean, wordSeparators: string | null, captureMatches: boolean): FindMatch | null;
 
 	/**
-	 * @internal
-	 */
-	setTokens(tokens: MultilineTokens[]): void;
-
-	/**
 	 * Flush all tokenization state.
 	 * @internal
 	 */
-	resetTokenization(): void;
+	flushTokens(): void;
 
 	/**
 	 * Force tokenization information for `lineNumber` to be accurate.
@@ -1122,12 +1116,6 @@ export interface ITextModel {
 	 * @internal
 	 */
 	onDidChangeTokens(listener: (e: IModelTokensChangedEvent) => void): IDisposable;
-	/**
-	 * An event emitted when the model has been attached to the first editor or detached from the last editor.
-	 * @event
-	 * @internal
-	 */
-	onDidChangeAttached(listener: () => void): IDisposable;
 	/**
 	 * An event emitted right before disposing the model.
 	 * @event

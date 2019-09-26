@@ -8,15 +8,15 @@ import { IKeyboardEvent } from 'vs/base/browser/keyboardEvent';
 import { DomScrollableElement } from 'vs/base/browser/ui/scrollbar/scrollableElement';
 import { Widget } from 'vs/base/browser/ui/widget';
 import { KeyCode } from 'vs/base/common/keyCodes';
-import { IContentWidget, ICodeEditor, IContentWidgetPosition, ContentWidgetPositionPreference, IOverlayWidget, IOverlayWidgetPosition } from 'vs/editor/browser/editorBrowser';
-import { ConfigurationChangedEvent, EditorOption } from 'vs/editor/common/config/editorOptions';
+import * as editorBrowser from 'vs/editor/browser/editorBrowser';
+import { IConfigurationChangedEvent } from 'vs/editor/common/config/editorOptions';
 import { Position } from 'vs/editor/common/core/position';
 import { Range } from 'vs/editor/common/core/range';
 
-export class ContentHoverWidget extends Widget implements IContentWidget {
+export class ContentHoverWidget extends Widget implements editorBrowser.IContentWidget {
 
 	private readonly _id: string;
-	protected _editor: ICodeEditor;
+	protected _editor: editorBrowser.ICodeEditor;
 	private _isVisible: boolean;
 	private readonly _containerDomNode: HTMLElement;
 	private readonly _domNode: HTMLElement;
@@ -37,12 +37,11 @@ export class ContentHoverWidget extends Widget implements IContentWidget {
 		toggleClass(this._containerDomNode, 'hidden', !this._isVisible);
 	}
 
-	constructor(id: string, editor: ICodeEditor) {
+	constructor(id: string, editor: editorBrowser.ICodeEditor) {
 		super();
 		this._id = id;
 		this._editor = editor;
 		this._isVisible = false;
-		this._stoleFocus = false;
 
 		this._containerDomNode = document.createElement('div');
 		this._containerDomNode.className = 'monaco-editor-hover hidden';
@@ -61,8 +60,8 @@ export class ContentHoverWidget extends Widget implements IContentWidget {
 			}
 		});
 
-		this._register(this._editor.onDidChangeConfiguration((e: ConfigurationChangedEvent) => {
-			if (e.hasChanged(EditorOption.fontInfo)) {
+		this._register(this._editor.onDidChangeConfiguration((e: IConfigurationChangedEvent) => {
+			if (e.fontInfo) {
 				this.updateFont();
 			}
 		}));
@@ -73,7 +72,6 @@ export class ContentHoverWidget extends Widget implements IContentWidget {
 		this._editor.addContentWidget(this);
 		this._showAtPosition = null;
 		this._showAtRange = null;
-		this._stoleFocus = false;
 	}
 
 	public getId(): string {
@@ -113,14 +111,14 @@ export class ContentHoverWidget extends Widget implements IContentWidget {
 		}
 	}
 
-	public getPosition(): IContentWidgetPosition | null {
+	public getPosition(): editorBrowser.IContentWidgetPosition | null {
 		if (this.isVisible) {
 			return {
 				position: this._showAtPosition,
 				range: this._showAtRange,
 				preference: [
-					ContentWidgetPositionPreference.ABOVE,
-					ContentWidgetPositionPreference.BELOW
+					editorBrowser.ContentWidgetPositionPreference.ABOVE,
+					editorBrowser.ContentWidgetPositionPreference.BELOW
 				]
 			};
 		}
@@ -152,7 +150,7 @@ export class ContentHoverWidget extends Widget implements IContentWidget {
 
 	private layout(): void {
 		const height = Math.max(this._editor.getLayoutInfo().height / 4, 250);
-		const { fontSize, lineHeight } = this._editor.getOption(EditorOption.fontInfo);
+		const { fontSize, lineHeight } = this._editor.getConfiguration().fontInfo;
 
 		this._domNode.style.fontSize = `${fontSize}px`;
 		this._domNode.style.lineHeight = `${lineHeight}px`;
@@ -161,15 +159,15 @@ export class ContentHoverWidget extends Widget implements IContentWidget {
 	}
 }
 
-export class GlyphHoverWidget extends Widget implements IOverlayWidget {
+export class GlyphHoverWidget extends Widget implements editorBrowser.IOverlayWidget {
 
 	private readonly _id: string;
-	protected _editor: ICodeEditor;
+	protected _editor: editorBrowser.ICodeEditor;
 	private _isVisible: boolean;
 	private readonly _domNode: HTMLElement;
 	protected _showAtLineNumber: number;
 
-	constructor(id: string, editor: ICodeEditor) {
+	constructor(id: string, editor: editorBrowser.ICodeEditor) {
 		super();
 		this._id = id;
 		this._editor = editor;
@@ -182,8 +180,8 @@ export class GlyphHoverWidget extends Widget implements IOverlayWidget {
 
 		this._showAtLineNumber = -1;
 
-		this._register(this._editor.onDidChangeConfiguration((e: ConfigurationChangedEvent) => {
-			if (e.hasChanged(EditorOption.fontInfo)) {
+		this._register(this._editor.onDidChangeConfiguration((e: IConfigurationChangedEvent) => {
+			if (e.fontInfo) {
 				this.updateFont();
 			}
 		}));
@@ -218,7 +216,7 @@ export class GlyphHoverWidget extends Widget implements IOverlayWidget {
 		const editorLayout = this._editor.getLayoutInfo();
 		const topForLineNumber = this._editor.getTopForLineNumber(this._showAtLineNumber);
 		const editorScrollTop = this._editor.getScrollTop();
-		const lineHeight = this._editor.getOption(EditorOption.lineHeight);
+		const lineHeight = this._editor.getConfiguration().lineHeight;
 		const nodeHeight = this._domNode.clientHeight;
 		const top = topForLineNumber - editorScrollTop - ((nodeHeight - lineHeight) / 2);
 
@@ -233,7 +231,7 @@ export class GlyphHoverWidget extends Widget implements IOverlayWidget {
 		this.isVisible = false;
 	}
 
-	public getPosition(): IOverlayWidgetPosition | null {
+	public getPosition(): editorBrowser.IOverlayWidgetPosition | null {
 		return null;
 	}
 

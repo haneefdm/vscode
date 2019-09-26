@@ -4,9 +4,10 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { localize } from 'vs/nls';
-import product from 'vs/platform/product/common/product';
+import product from 'vs/platform/product/node/product';
+import pkg from 'vs/platform/product/node/package';
 import * as path from 'vs/base/common/path';
-import * as semver from 'semver-umd';
+import * as semver from 'semver';
 
 import { ServiceCollection } from 'vs/platform/instantiation/common/serviceCollection';
 import { SyncDescriptor } from 'vs/platform/instantiation/common/descriptors';
@@ -16,19 +17,19 @@ import { IEnvironmentService, ParsedArgs } from 'vs/platform/environment/common/
 import { EnvironmentService } from 'vs/platform/environment/node/environmentService';
 import { IExtensionManagementService, IExtensionGalleryService, IGalleryExtension, ILocalExtension } from 'vs/platform/extensionManagement/common/extensionManagement';
 import { ExtensionManagementService } from 'vs/platform/extensionManagement/node/extensionManagementService';
-import { ExtensionGalleryService } from 'vs/platform/extensionManagement/common/extensionGalleryService';
+import { ExtensionGalleryService } from 'vs/platform/extensionManagement/node/extensionGalleryService';
 import { ITelemetryService } from 'vs/platform/telemetry/common/telemetry';
 import { combinedAppender, NullTelemetryService } from 'vs/platform/telemetry/common/telemetryUtils';
 import { TelemetryService, ITelemetryServiceConfig } from 'vs/platform/telemetry/common/telemetryService';
 import { resolveCommonProperties } from 'vs/platform/telemetry/node/commonProperties';
-import { IRequestService } from 'vs/platform/request/common/request';
+import { IRequestService } from 'vs/platform/request/node/request';
 import { RequestService } from 'vs/platform/request/node/requestService';
 import { IConfigurationService } from 'vs/platform/configuration/common/configuration';
 import { ConfigurationService } from 'vs/platform/configuration/node/configurationService';
 import { AppInsightsAppender } from 'vs/platform/telemetry/node/appInsightsAppender';
 import { mkdirp, writeFile } from 'vs/base/node/pfs';
 import { getBaseLabel } from 'vs/base/common/labels';
-import { IStateService } from 'vs/platform/state/node/state';
+import { IStateService } from 'vs/platform/state/common/state';
 import { StateService } from 'vs/platform/state/node/stateService';
 import { ILogService, getLogLevel } from 'vs/platform/log/common/log';
 import { isPromiseCanceledError } from 'vs/base/common/errors';
@@ -41,11 +42,6 @@ import { LocalizationsService } from 'vs/platform/localizations/node/localizatio
 import { Schemas } from 'vs/base/common/network';
 import { SpdLogService } from 'vs/platform/log/node/spdlogService';
 import { buildTelemetryMessage } from 'vs/platform/telemetry/node/telemetry';
-import { FileService } from 'vs/platform/files/common/fileService';
-import { IFileService } from 'vs/platform/files/common/files';
-import { DiskFileSystemProvider } from 'vs/platform/files/node/diskFileSystemProvider';
-import { DisposableStore } from 'vs/base/common/lifecycle';
-import { IProductService } from 'vs/platform/product/common/productService';
 
 const notFound = (id: string) => localize('notFound', "Extension '{0}' not found.", id);
 const notInstalled = (id: string) => localize('notInstalled', "Extension '{0}' is not installed.", id);
@@ -82,16 +78,25 @@ export class Main {
 	async run(argv: ParsedArgs): Promise<void> {
 		if (argv['install-source']) {
 			await this.setInstallSource(argv['install-source']);
+
 		} else if (argv['list-extensions']) {
-			await this.listExtensions(!!argv['show-versions'], argv['category']);
+			await this.listExtensions(!!argv['show-versions']);
+
 		} else if (argv['install-extension']) {
-			await this.installExtensions(argv['install-extension'], !!argv['force']);
+			const arg = argv['install-extension'];
+			const args: string[] = typeof arg === 'string' ? [arg] : arg;
+			await this.installExtensions(args, !!argv['force']);
+
 		} else if (argv['uninstall-extension']) {
-			await this.uninstallExtension(argv['uninstall-extension']);
+			const arg = argv['uninstall-extension'];
+			const ids: string[] = typeof arg === 'string' ? [arg] : arg;
+			await this.uninstallExtension(ids);
 		} else if (argv['locate-extension']) {
-			await this.locateExtension(argv['locate-extension']);
+			const arg = argv['locate-extension'];
+			const ids: string[] = typeof arg === 'string' ? [arg] : arg;
+			await this.locateExtension(ids);
 		} else if (argv['telemetry']) {
-			console.log(buildTelemetryMessage(this.environmentService.appRoot, this.environmentService.extensionsPath ? this.environmentService.extensionsPath : undefined));
+			console.log(buildTelemetryMessage(this.environmentService.appRoot, this.environmentService.extensionsPath));
 		}
 	}
 
@@ -99,29 +104,8 @@ export class Main {
 		return writeFile(this.environmentService.installSourcePath, installSource.slice(0, 30));
 	}
 
-	private async listExtensions(showVersions: boolean, category?: string): Promise<void> {
-		let extensions = await this.extensionManagementService.getInstalled(ExtensionType.User);
-		// TODO: we should save this array in a common place so that the command and extensionQuery can use it that way changing it is easier
-		const categories = ['"programming languages"', 'snippets', 'linters', 'themes', 'debuggers', 'formatters', 'keymaps', '"scm providers"', 'other', '"extension packs"', '"language packs"'];
-		if (category && category !== '') {
-			if (categories.indexOf(category.toLowerCase()) < 0) {
-				console.log('Invalid category please enter a valid category. To list valid categories run --category without a category specified');
-				return;
-			}
-			extensions = extensions.filter(e => {
-				if (e.manifest.categories) {
-					const lowerCaseCategories: string[] = e.manifest.categories.map(c => c.toLowerCase());
-					return lowerCaseCategories.indexOf(category.toLowerCase()) > -1;
-				}
-				return false;
-			});
-		} else if (category === '') {
-			console.log('Possible Categories: ');
-			categories.forEach(category => {
-				console.log(category);
-			});
-			return;
-		}
+	private async listExtensions(showVersions: boolean): Promise<void> {
+		const extensions = await this.extensionManagementService.getInstalled(ExtensionType.User);
 		extensions.forEach(e => console.log(getId(e.manifest, showVersions)));
 	}
 
@@ -296,46 +280,31 @@ const eventPrefix = 'monacoworkbench';
 
 export async function main(argv: ParsedArgs): Promise<void> {
 	const services = new ServiceCollection();
-	const disposables = new DisposableStore();
 
 	const environmentService = new EnvironmentService(argv, process.execPath);
 	const logService: ILogService = new SpdLogService('cli', environmentService.logsPath, getLogLevel(environmentService));
 	process.once('exit', () => logService.dispose());
 	logService.info('main', argv);
 
-	await Promise.all<void | undefined>([environmentService.appSettingsHome.fsPath, environmentService.extensionsPath]
-		.map((path): undefined | Promise<void> => path ? mkdirp(path) : undefined));
+	await Promise.all([environmentService.appSettingsHome.fsPath, environmentService.extensionsPath].map(p => mkdirp(p)));
 
 	const configurationService = new ConfigurationService(environmentService.settingsResource);
-	disposables.add(configurationService);
 	await configurationService.initialize();
 
 	services.set(IEnvironmentService, environmentService);
 	services.set(ILogService, logService);
 	services.set(IConfigurationService, configurationService);
 	services.set(IStateService, new SyncDescriptor(StateService));
-	services.set(IProductService, { _serviceBrand: undefined, ...product });
-
-	// Files
-	const fileService = new FileService(logService);
-	disposables.add(fileService);
-	services.set(IFileService, fileService);
-
-	const diskFileSystemProvider = new DiskFileSystemProvider(logService);
-	disposables.add(diskFileSystemProvider);
-	fileService.registerProvider(Schemas.file, diskFileSystemProvider);
 
 	const instantiationService: IInstantiationService = new InstantiationService(services);
 
-	return instantiationService.invokeFunction(async accessor => {
+	return instantiationService.invokeFunction(accessor => {
 		const envService = accessor.get(IEnvironmentService);
 		const stateService = accessor.get(IStateService);
 
 		const { appRoot, extensionsPath, extensionDevelopmentLocationURI: extensionDevelopmentLocationURI, isBuilt, installSourcePath } = envService;
 
 		const services = new ServiceCollection();
-
-
 		services.set(IRequestService, new SyncDescriptor(RequestService));
 		services.set(IExtensionManagementService, new SyncDescriptor(ExtensionManagementService));
 		services.set(IExtensionGalleryService, new SyncDescriptor(ExtensionGalleryService));
@@ -349,12 +318,11 @@ export async function main(argv: ParsedArgs): Promise<void> {
 
 			const config: ITelemetryServiceConfig = {
 				appender: combinedAppender(...appenders),
-				commonProperties: resolveCommonProperties(product.commit, product.version, stateService.getItem('telemetry.machineId'), product.msftInternalDomains, installSourcePath),
-				piiPaths: extensionsPath ? [appRoot, extensionsPath] : [appRoot]
+				commonProperties: resolveCommonProperties(product.commit, pkg.version, stateService.getItem('telemetry.machineId'), installSourcePath),
+				piiPaths: [appRoot, extensionsPath]
 			};
 
 			services.set(ITelemetryService, new SyncDescriptor(TelemetryService, [config]));
-
 		} else {
 			services.set(ITelemetryService, NullTelemetryService);
 		}
@@ -362,12 +330,9 @@ export async function main(argv: ParsedArgs): Promise<void> {
 		const instantiationService2 = instantiationService.createChild(services);
 		const main = instantiationService2.createInstance(Main);
 
-		try {
-			await main.run(argv);
-			// Flush the remaining data in AI adapter.
-			await combinedAppender(...appenders).flush();
-		} finally {
-			disposables.dispose();
-		}
+		return main.run(argv).then(() => {
+			// Dispose the AI adapter so that remaining data gets flushed.
+			return combinedAppender(...appenders).dispose();
+		});
 	});
 }

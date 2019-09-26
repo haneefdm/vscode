@@ -62,7 +62,7 @@ class CommandsHistory extends Disposable {
 	private static readonly PREF_KEY_CACHE = 'commandPalette.mru.cache';
 	private static readonly PREF_KEY_COUNTER = 'commandPalette.mru.counter';
 
-	private commandHistoryLength = 0;
+	private commandHistoryLength: number;
 
 	constructor(
 		@IStorageService private readonly storageService: IStorageService,
@@ -78,15 +78,14 @@ class CommandsHistory extends Disposable {
 
 	private registerListeners(): void {
 		this._register(this.configurationService.onDidChangeConfiguration(e => this.updateConfiguration()));
+		this._register(this.storageService.onWillSaveState(() => this.saveState()));
 	}
 
 	private updateConfiguration(): void {
 		this.commandHistoryLength = resolveCommandHistory(this.configurationService);
 
-		if (commandHistory && commandHistory.limit !== this.commandHistoryLength) {
+		if (commandHistory) {
 			commandHistory.limit = this.commandHistoryLength;
-
-			CommandsHistory.saveState(this.storageService);
 		}
 	}
 
@@ -117,20 +116,18 @@ class CommandsHistory extends Disposable {
 
 	push(commandId: string): void {
 		commandHistory.set(commandId, commandCounter++); // set counter to command
-
-		CommandsHistory.saveState(this.storageService);
 	}
 
 	peek(commandId: string): number | undefined {
 		return commandHistory.peek(commandId);
 	}
 
-	static saveState(storageService: IStorageService): void {
+	private saveState(): void {
 		const serializedCache: ISerializedCommandHistory = { usesLRU: true, entries: [] };
 		commandHistory.forEach((value, key) => serializedCache.entries.push({ key, value }));
 
-		storageService.store(CommandsHistory.PREF_KEY_CACHE, JSON.stringify(serializedCache), StorageScope.GLOBAL);
-		storageService.store(CommandsHistory.PREF_KEY_COUNTER, commandCounter, StorageScope.GLOBAL);
+		this.storageService.store(CommandsHistory.PREF_KEY_CACHE, JSON.stringify(serializedCache), StorageScope.GLOBAL);
+		this.storageService.store(CommandsHistory.PREF_KEY_COUNTER, commandCounter, StorageScope.GLOBAL);
 	}
 }
 
@@ -172,8 +169,7 @@ export class ClearCommandHistoryAction extends Action {
 	constructor(
 		id: string,
 		label: string,
-		@IConfigurationService private readonly configurationService: IConfigurationService,
-		@IStorageService private readonly storageService: IStorageService
+		@IConfigurationService private readonly configurationService: IConfigurationService
 	) {
 		super(id, label);
 	}
@@ -183,8 +179,6 @@ export class ClearCommandHistoryAction extends Action {
 		if (commandHistoryLength > 0) {
 			commandHistory = new LRUCache<string, number>(commandHistoryLength);
 			commandCounter = 1;
-
-			CommandsHistory.saveState(this.storageService);
 		}
 
 		return Promise.resolve(undefined);
@@ -217,8 +211,8 @@ class CommandPaletteEditorAction extends EditorAction {
 }
 
 abstract class BaseCommandEntry extends QuickOpenEntryGroup {
-	private description: string | undefined;
-	private alias: string | undefined;
+	private description: string;
+	private alias: string;
 	private labelLowercase: string;
 	private readonly keybindingAriaLabel?: string;
 
@@ -258,7 +252,7 @@ abstract class BaseCommandEntry extends QuickOpenEntryGroup {
 		return this.labelLowercase;
 	}
 
-	getDescription(): string | undefined {
+	getDescription(): string {
 		return this.description;
 	}
 
@@ -270,7 +264,7 @@ abstract class BaseCommandEntry extends QuickOpenEntryGroup {
 		return this.keybinding;
 	}
 
-	getDetail(): string | undefined {
+	getDetail(): string {
 		return this.alias;
 	}
 
@@ -381,13 +375,13 @@ export class CommandsHandler extends QuickOpenHandler implements IDisposable {
 
 	static readonly ID = 'workbench.picker.commands';
 
-	private commandHistoryEnabled: boolean | undefined;
+	private commandHistoryEnabled: boolean;
 	private readonly commandsHistory: CommandsHistory;
 
 	private readonly disposables = new DisposableStore();
 	private readonly disposeOnClose = new DisposableStore();
 
-	private waitedForExtensionsRegistered: boolean | undefined;
+	private waitedForExtensionsRegistered: boolean;
 
 	constructor(
 		@IEditorService private readonly editorService: IEditorService,

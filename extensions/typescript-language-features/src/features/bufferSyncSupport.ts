@@ -34,27 +34,6 @@ function mode2ScriptKind(mode: string): 'TS' | 'TSX' | 'JS' | 'JSX' | undefined 
 	return undefined;
 }
 
-class CloseOperation {
-	readonly type = 'close';
-	constructor(
-		public readonly args: string
-	) { }
-}
-
-class OpenOperation {
-	readonly type = 'open';
-	constructor(
-		public readonly args: Proto.OpenRequestArgs
-	) { }
-}
-
-class ChangeOperation {
-	readonly type = 'change';
-	constructor(
-		public readonly args: Proto.FileCodeEdits
-	) { }
-}
-
 /**
  * Manages synchronization of buffers with the TS server.
  *
@@ -62,7 +41,8 @@ class ChangeOperation {
  */
 class BufferSynchronizer {
 
-	private readonly _pending = new Map<string, CloseOperation | OpenOperation | ChangeOperation>();
+	private _pending: Proto.UpdateOpenRequestArgs = {};
+	private _pendingFiles = new Set<string>();
 
 	constructor(
 		private readonly client: ITypeScriptServiceClient
@@ -71,7 +51,10 @@ class BufferSynchronizer {
 	public open(args: Proto.OpenRequestArgs) {
 		if (this.supportsBatching) {
 			this.updatePending(args.file, pending => {
-				pending.set(args.file, new OpenOperation(args));
+				if (!pending.openFiles) {
+					pending.openFiles = [];
+				}
+				pending.openFiles.push(args);
 			});
 		} else {
 			this.client.executeWithoutWaitingForResponse('open', args);
@@ -81,7 +64,10 @@ class BufferSynchronizer {
 	public close(filepath: string) {
 		if (this.supportsBatching) {
 			this.updatePending(filepath, pending => {
-				pending.set(filepath, new CloseOperation(filepath));
+				if (!pending.closedFiles) {
+					pending.closedFiles = [];
+				}
+				pending.closedFiles.push(filepath);
 			});
 		} else {
 			const args: Proto.FileRequestArgs = { file: filepath };
@@ -96,14 +82,18 @@ class BufferSynchronizer {
 
 		if (this.supportsBatching) {
 			this.updatePending(filepath, pending => {
-				pending.set(filepath, new ChangeOperation({
+				if (!pending.changedFiles) {
+					pending.changedFiles = [];
+				}
+
+				pending.changedFiles.push({
 					fileName: filepath,
 					textChanges: events.map((change): Proto.CodeEdit => ({
 						newText: change.text,
 						start: typeConverters.Position.toLocation(change.range.start),
 						end: typeConverters.Position.toLocation(change.range.end),
 					})).reverse(), // Send the edits end-of-document to start-of-document order
-				}));
+				});
 			});
 		} else {
 			for (const { range, text } of events) {
@@ -127,23 +117,13 @@ class BufferSynchronizer {
 	private flush() {
 		if (!this.supportsBatching) {
 			// We've already eagerly synchronized
-			this._pending.clear();
 			return;
 		}
 
-		if (this._pending.size > 0) {
-			const closedFiles: string[] = [];
-			const openFiles: Proto.OpenRequestArgs[] = [];
-			const changedFiles: Proto.FileCodeEdits[] = [];
-			for (const change of this._pending.values()) {
-				switch (change.type) {
-					case 'change': changedFiles.push(change.args); break;
-					case 'open': openFiles.push(change.args); break;
-					case 'close': closedFiles.push(change.args); break;
-				}
-			}
-			this.client.executeWithoutWaitingForResponse('updateOpen', { changedFiles, closedFiles, openFiles });
-			this._pending.clear();
+		if (this._pending.changedFiles || this._pending.closedFiles || this._pending.openFiles) {
+			this.client.executeWithoutWaitingForResponse('updateOpen', this._pending);
+			this._pending = {};
+			this._pendingFiles.clear();
 		}
 	}
 
@@ -151,12 +131,15 @@ class BufferSynchronizer {
 		return this.client.apiVersion.gte(API.v340) && vscode.workspace.getConfiguration('typescript', null).get<boolean>('useBatchedBufferSync', true);
 	}
 
-	private updatePending(filepath: string, f: (pending: Map<string, CloseOperation | OpenOperation | ChangeOperation>) => void): void {
-		if (this._pending.has(filepath)) {
-			// we saw this file before, make sure we flush before working with it again
+	private updatePending(filepath: string, f: (pending: Proto.UpdateOpenRequestArgs) => void): void {
+		if (this.supportsBatching && this._pendingFiles.has(filepath)) {
 			this.flush();
+			this._pendingFiles.clear();
+			f(this._pending);
+			this._pendingFiles.add(filepath);
+		} else {
+			f(this._pending);
 		}
-		f(this._pending);
 	}
 }
 
@@ -177,9 +160,11 @@ class SyncedBuffer {
 			fileContent: this.document.getText(),
 		};
 
-		const scriptKind = mode2ScriptKind(this.document.languageId);
-		if (scriptKind) {
-			args.scriptKindName = scriptKind;
+		if (this.client.apiVersion.gte(API.v203)) {
+			const scriptKind = mode2ScriptKind(this.document.languageId);
+			if (scriptKind) {
+				args.scriptKindName = scriptKind;
+			}
 		}
 
 		if (this.client.apiVersion.gte(API.v230)) {

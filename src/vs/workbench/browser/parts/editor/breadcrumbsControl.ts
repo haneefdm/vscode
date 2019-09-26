@@ -45,7 +45,7 @@ import { ITelemetryService } from 'vs/platform/telemetry/common/telemetry';
 import { ICodeEditorService } from 'vs/editor/browser/services/codeEditorService';
 import { IEditorGroupView } from 'vs/workbench/browser/parts/editor/editor';
 import { onDidChangeZoomLevel } from 'vs/base/browser/browser';
-import { withNullAsUndefined } from 'vs/base/common/types';
+import { withNullAsUndefined, withUndefinedAsNull } from 'vs/base/common/types';
 import { ILabelService } from 'vs/platform/label/common/label';
 
 class Item extends BreadcrumbsItem {
@@ -69,9 +69,7 @@ class Item extends BreadcrumbsItem {
 			return false;
 		}
 		if (this.element instanceof FileElement && other.element instanceof FileElement) {
-			return (isEqual(this.element.uri, other.element.uri, false) &&
-				this.options.showFileIcons === other.options.showFileIcons &&
-				this.options.showSymbolIcons === other.options.showSymbolIcons);
+			return isEqual(this.element.uri, other.element.uri, false);
 		}
 		if (this.element instanceof TreeElement && other.element instanceof TreeElement) {
 			return this.element.id === other.element.id;
@@ -145,7 +143,6 @@ export class BreadcrumbsControl {
 	private readonly _ckBreadcrumbsActive: IContextKey<boolean>;
 
 	private readonly _cfUseQuickPick: BreadcrumbsConfig<boolean>;
-	private readonly _cfShowIcons: BreadcrumbsConfig<boolean>;
 
 	readonly domNode: HTMLDivElement;
 	private readonly _widget: BreadcrumbsWidget;
@@ -188,7 +185,6 @@ export class BreadcrumbsControl {
 		this._ckBreadcrumbsActive = BreadcrumbsControl.CK_BreadcrumbsActive.bindTo(this._contextKeyService);
 
 		this._cfUseQuickPick = BreadcrumbsConfig.UseQuickPick.bindTo(_configurationService);
-		this._cfShowIcons = BreadcrumbsConfig.Icons.bindTo(_configurationService);
 
 		this._disposables.add(breadcrumbsService.register(this._editorGroup.id, this._widget));
 	}
@@ -200,7 +196,6 @@ export class BreadcrumbsControl {
 		this._ckBreadcrumbsVisible.reset();
 		this._ckBreadcrumbsActive.reset();
 		this._cfUseQuickPick.dispose();
-		this._cfShowIcons.dispose();
 		this._widget.dispose();
 		this.domNode.remove();
 	}
@@ -251,23 +246,15 @@ export class BreadcrumbsControl {
 		dom.toggleClass(this.domNode, 'backslash-path', this._labelService.getSeparator(uri.scheme, uri.authority) === '\\');
 
 		const updateBreadcrumbs = () => {
-			const showIcons = this._cfShowIcons.getValue();
-			const options: IBreadcrumbsControlOptions = {
-				...this._options,
-				showFileIcons: this._options.showFileIcons && showIcons,
-				showSymbolIcons: this._options.showSymbolIcons && showIcons
-			};
-			const items = model.getElements().map(element => new Item(element, options, this._instantiationService));
+			const items = model.getElements().map(element => new Item(element, this._options, this._instantiationService));
 			this._widget.setItems(items);
 			this._widget.reveal(items[items.length - 1]);
 		};
 		const listener = model.onDidUpdate(updateBreadcrumbs);
-		const configListener = this._cfShowIcons.onDidChange(updateBreadcrumbs);
 		updateBreadcrumbs();
 		this._breadcrumbsDisposables.clear();
 		this._breadcrumbsDisposables.add(model);
 		this._breadcrumbsDisposables.add(listener);
-		this._breadcrumbsDisposables.add(configListener);
 
 		// close picker on hide/update
 		this._breadcrumbsDisposables.add({
@@ -317,10 +304,12 @@ export class BreadcrumbsControl {
 		const { element } = event.item as Item;
 		this._editorGroup.focus();
 
-		type BreadcrumbSelectClassification = {
-			type: { classification: 'SystemMetaData', purpose: 'FeatureInsight' };
-		};
-		this._telemetryService.publicLog2<{ type: string }, BreadcrumbSelectClassification>('breadcrumbs/select', { type: element instanceof TreeElement ? 'symbol' : 'file' });
+		/* __GDPR__
+			"breadcrumbs/select" : {
+				"type": { "classification": "SystemMetaData", "purpose": "FeatureInsight" }
+			}
+		*/
+		this._telemetryService.publicLog('breadcrumbs/select', { type: element instanceof TreeElement ? 'symbol' : 'file' });
 
 		const group = this._getEditorGroup(event.payload);
 		if (group !== undefined) {
@@ -485,7 +474,7 @@ export class BreadcrumbsControl {
 						selection: Range.collapseToStart(element.symbol.selectionRange),
 						revealInCenterIfOutsideViewport: true
 					}
-				}, this._getActiveCodeEditor(), group === SIDE_GROUP);
+				}, withUndefinedAsNull(this._getActiveCodeEditor()), group === SIDE_GROUP);
 			}
 		}
 	}

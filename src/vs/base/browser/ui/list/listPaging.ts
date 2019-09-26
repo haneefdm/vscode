@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import 'vs/css!./list';
-import { IDisposable, Disposable } from 'vs/base/common/lifecycle';
+import { IDisposable } from 'vs/base/common/lifecycle';
 import { range } from 'vs/base/common/arrays';
 import { IListVirtualDelegate, IListRenderer, IListEvent, IListContextMenuEvent } from './list';
 import { List, IListStyles, IListOptions } from './listWidget';
@@ -32,7 +32,7 @@ class PagedRenderer<TElement, TTemplateData> implements IListRenderer<number, IT
 
 	renderTemplate(container: HTMLElement): ITemplateData<TTemplateData> {
 		const data = this.renderer.renderTemplate(container);
-		return { data, disposable: Disposable.None };
+		return { data, disposable: { dispose: () => { } } };
 	}
 
 	renderElement(index: number, _: number, data: ITemplateData<TTemplateData>, height: number | undefined): void {
@@ -73,17 +73,16 @@ class PagedRenderer<TElement, TTemplateData> implements IListRenderer<number, IT
 export class PagedList<T> implements IDisposable {
 
 	private list: List<number>;
-	private _model!: IPagedModel<T>;
+	private _model: IPagedModel<T>;
 
 	constructor(
-		user: string,
 		container: HTMLElement,
 		virtualDelegate: IListVirtualDelegate<number>,
 		renderers: IPagedRenderer<T, any>[],
 		options: IListOptions<any> = {}
 	) {
 		const pagedRenderers = renderers.map(r => new PagedRenderer<T, ITemplateData<T>>(r, () => this.model));
-		this.list = new List(user, container, virtualDelegate, pagedRenderers, options);
+		this.list = new List(container, virtualDelegate, pagedRenderers, options);
 	}
 
 	getHTMLElement(): HTMLElement {
@@ -127,7 +126,7 @@ export class PagedList<T> implements IDisposable {
 	}
 
 	get onPin(): Event<IListEvent<T>> {
-		return Event.map(this.list.onDidPin, ({ elements, indexes }) => ({ elements: elements.map(e => this._model.get(e)), indexes }));
+		return Event.map(this.list.onPin, ({ elements, indexes }) => ({ elements: elements.map(e => this._model.get(e)), indexes }));
 	}
 
 	get onContextMenu(): Event<IListContextMenuEvent<T>> {

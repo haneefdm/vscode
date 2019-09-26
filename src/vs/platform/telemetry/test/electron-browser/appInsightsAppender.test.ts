@@ -24,7 +24,7 @@ class AppInsightsMock implements ITelemetryClient {
 }
 
 class TestableLogService extends AbstractLogService implements ILogService {
-	_serviceBrand: undefined;
+	_serviceBrand: any;
 
 	public logs: string[] = [];
 
@@ -84,7 +84,7 @@ suite('AIAdapter', () => {
 	});
 
 	teardown(() => {
-		adapter.flush();
+		adapter.dispose();
 	});
 
 	test('Simple event', () => {

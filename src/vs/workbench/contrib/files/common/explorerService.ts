@@ -5,7 +5,7 @@
 
 import { Event, Emitter } from 'vs/base/common/event';
 import { IWorkspaceContextService } from 'vs/platform/workspace/common/workspace';
-import { DisposableStore } from 'vs/base/common/lifecycle';
+import { IDisposable, dispose } from 'vs/base/common/lifecycle';
 import { IExplorerService, IEditableData, IFilesConfiguration, SortOrder, SortOrderConfiguration } from 'vs/workbench/contrib/files/common/files';
 import { ExplorerItem, ExplorerModel } from 'vs/workbench/contrib/files/common/explorerModel';
 import { URI } from 'vs/base/common/uri';
@@ -27,16 +27,16 @@ function getFileEventsExcludes(configurationService: IConfigurationService, root
 }
 
 export class ExplorerService implements IExplorerService {
-	_serviceBrand: undefined;
+	_serviceBrand: any;
 
 	private static readonly EXPLORER_FILE_CHANGES_REACT_DELAY = 500; // delay in ms to react to file changes to give our internal events a chance to react first
 
-	private readonly _onDidChangeRoots = new Emitter<void>();
-	private readonly _onDidChangeItem = new Emitter<{ item?: ExplorerItem, recursive: boolean }>();
-	private readonly _onDidChangeEditable = new Emitter<ExplorerItem>();
-	private readonly _onDidSelectResource = new Emitter<{ resource?: URI, reveal?: boolean }>();
-	private readonly _onDidCopyItems = new Emitter<{ items: ExplorerItem[], cut: boolean, previouslyCutItems: ExplorerItem[] | undefined }>();
-	private readonly disposables = new DisposableStore();
+	private _onDidChangeRoots = new Emitter<void>();
+	private _onDidChangeItem = new Emitter<{ item?: ExplorerItem, recursive: boolean }>();
+	private _onDidChangeEditable = new Emitter<ExplorerItem>();
+	private _onDidSelectResource = new Emitter<{ resource?: URI, reveal?: boolean }>();
+	private _onDidCopyItems = new Emitter<{ items: ExplorerItem[], cut: boolean, previouslyCutItems: ExplorerItem[] | undefined }>();
+	private disposables: IDisposable[] = [];
 	private editable: { stat: ExplorerItem, data: IEditableData } | undefined;
 	private _sortOrder: SortOrder;
 	private cutItems: ExplorerItem[] | undefined;
@@ -88,18 +88,18 @@ export class ExplorerService implements IExplorerService {
 			(root?: URI) => getFileEventsExcludes(this.configurationService, root),
 			(event: IConfigurationChangeEvent) => event.affectsConfiguration(FILES_EXCLUDE_CONFIG)
 		);
-		this.disposables.add(fileEventsFilter);
+		this.disposables.push(fileEventsFilter);
 
 		return fileEventsFilter;
 	}
 
 	@memoize get model(): ExplorerModel {
 		const model = new ExplorerModel(this.contextService);
-		this.disposables.add(model);
-		this.disposables.add(this.fileService.onAfterOperation(e => this.onFileOperation(e)));
-		this.disposables.add(this.fileService.onFileChanges(e => this.onFileChanges(e)));
-		this.disposables.add(this.configurationService.onDidChangeConfiguration(e => this.onConfigurationUpdated(this.configurationService.getValue<IFilesConfiguration>())));
-		this.disposables.add(this.fileService.onDidChangeFileSystemProviderRegistrations(e => {
+		this.disposables.push(model);
+		this.disposables.push(this.fileService.onAfterOperation(e => this.onFileOperation(e)));
+		this.disposables.push(this.fileService.onFileChanges(e => this.onFileChanges(e)));
+		this.disposables.push(this.configurationService.onDidChangeConfiguration(e => this.onConfigurationUpdated(this.configurationService.getValue<IFilesConfiguration>())));
+		this.disposables.push(this.fileService.onDidChangeFileSystemProviderRegistrations(e => {
 			if (e.added && this.fileSystemProviderSchemes.has(e.scheme)) {
 				// A file system provider got re-registered, we should update all file stats since they might change (got read-only)
 				this.model.roots.forEach(r => r.forgetChildren());
@@ -108,7 +108,7 @@ export class ExplorerService implements IExplorerService {
 				this.fileSystemProviderSchemes.add(e.scheme);
 			}
 		}));
-		this.disposables.add(model.onDidChangeRoots(() => this._onDidChangeRoots.fire()));
+		this.disposables.push(model.onDidChangeRoots(() => this._onDidChangeRoots.fire()));
 
 		return model;
 	}
@@ -140,10 +140,6 @@ export class ExplorerService implements IExplorerService {
 		return !!this.cutItems && this.cutItems.indexOf(item) >= 0;
 	}
 
-	getEditable(): { stat: ExplorerItem, data: IEditableData } | undefined {
-		return this.editable;
-	}
-
 	getEditableData(stat: ExplorerItem): IEditableData | undefined {
 		return this.editable && this.editable.stat === stat ? this.editable.data : undefined;
 	}
@@ -162,11 +158,7 @@ export class ExplorerService implements IExplorerService {
 		// Stat needs to be resolved first and then revealed
 		const options: IResolveFileOptions = { resolveTo: [resource], resolveMetadata: this.sortOrder === 'modified' };
 		const workspaceFolder = this.contextService.getWorkspaceFolder(resource);
-		if (workspaceFolder === null) {
-			return Promise.resolve(undefined);
-		}
-		const rootUri = workspaceFolder.uri;
-
+		const rootUri = workspaceFolder ? workspaceFolder.uri : this.roots[0].resource;
 		const root = this.roots.filter(r => r.resource.toString() === rootUri.toString()).pop()!;
 
 		try {
@@ -388,6 +380,6 @@ export class ExplorerService implements IExplorerService {
 	}
 
 	dispose(): void {
-		this.disposables.dispose();
+		dispose(this.disposables);
 	}
 }

@@ -19,8 +19,6 @@ import { PrefixSumComputer } from 'vs/editor/common/viewModel/prefixSumComputer'
 import { ILineMapping, ISimpleModel, SplitLine, SplitLinesCollection } from 'vs/editor/common/viewModel/splitLinesCollection';
 import { ViewLineData } from 'vs/editor/common/viewModel/viewModel';
 import { TestConfiguration } from 'vs/editor/test/common/mocks/testConfiguration';
-import { EditorOption } from 'vs/editor/common/config/editorOptions';
-
 
 suite('Editor ViewModel - SplitLinesCollection', () => {
 	test('SplitLine', () => {
@@ -90,21 +88,15 @@ suite('Editor ViewModel - SplitLinesCollection', () => {
 	});
 
 	function withSplitLinesCollection(text: string, callback: (model: TextModel, linesCollection: SplitLinesCollection) => void): void {
-		const config = new TestConfiguration({});
-		const wrappingInfo = config.options.get(EditorOption.wrappingInfo);
-		const fontInfo = config.options.get(EditorOption.fontInfo);
-		const wordWrapBreakAfterCharacters = config.options.get(EditorOption.wordWrapBreakAfterCharacters);
-		const wordWrapBreakBeforeCharacters = config.options.get(EditorOption.wordWrapBreakBeforeCharacters);
-		const wordWrapBreakObtrusiveCharacters = config.options.get(EditorOption.wordWrapBreakObtrusiveCharacters);
-		const wrappingIndent = config.options.get(EditorOption.wrappingIndent);
+		let config = new TestConfiguration({});
 
-		const hardWrappingLineMapperFactory = new CharacterHardWrappingLineMapperFactory(
-			wordWrapBreakBeforeCharacters,
-			wordWrapBreakAfterCharacters,
-			wordWrapBreakObtrusiveCharacters
+		let hardWrappingLineMapperFactory = new CharacterHardWrappingLineMapperFactory(
+			config.editor.wrappingInfo.wordWrapBreakBeforeCharacters,
+			config.editor.wrappingInfo.wordWrapBreakAfterCharacters,
+			config.editor.wrappingInfo.wordWrapBreakObtrusiveCharacters
 		);
 
-		const model = TextModel.createFromString([
+		let model = TextModel.createFromString([
 			'int main() {',
 			'\tprintf("Hello world!");',
 			'}',
@@ -113,13 +105,13 @@ suite('Editor ViewModel - SplitLinesCollection', () => {
 			'}',
 		].join('\n'));
 
-		const linesCollection = new SplitLinesCollection(
+		let linesCollection = new SplitLinesCollection(
 			model,
 			hardWrappingLineMapperFactory,
 			model.getOptions().tabSize,
-			wrappingInfo.wrappingColumn,
-			fontInfo.typicalFullwidthCharacterWidth / fontInfo.typicalHalfwidthCharacterWidth,
-			wrappingIndent
+			config.editor.wrappingInfo.wrappingColumn,
+			config.editor.fontInfo.typicalFullwidthCharacterWidth / config.editor.fontInfo.typicalHalfwidthCharacterWidth,
+			config.editor.wrappingInfo.wrappingIndent
 		);
 
 		callback(model, linesCollection);
@@ -740,31 +732,25 @@ suite('SplitLinesCollection', () => {
 	});
 
 	function withSplitLinesCollection(model: TextModel, wordWrap: 'on' | 'off' | 'wordWrapColumn' | 'bounded', wordWrapColumn: number, callback: (splitLinesCollection: SplitLinesCollection) => void): void {
-		const configuration = new TestConfiguration({
+		let configuration = new TestConfiguration({
 			wordWrap: wordWrap,
 			wordWrapColumn: wordWrapColumn,
 			wrappingIndent: 'indent'
 		});
-		const wrappingInfo = configuration.options.get(EditorOption.wrappingInfo);
-		const fontInfo = configuration.options.get(EditorOption.fontInfo);
-		const wordWrapBreakAfterCharacters = configuration.options.get(EditorOption.wordWrapBreakAfterCharacters);
-		const wordWrapBreakBeforeCharacters = configuration.options.get(EditorOption.wordWrapBreakBeforeCharacters);
-		const wordWrapBreakObtrusiveCharacters = configuration.options.get(EditorOption.wordWrapBreakObtrusiveCharacters);
-		const wrappingIndent = configuration.options.get(EditorOption.wrappingIndent);
 
-		const factory = new CharacterHardWrappingLineMapperFactory(
-			wordWrapBreakBeforeCharacters,
-			wordWrapBreakAfterCharacters,
-			wordWrapBreakObtrusiveCharacters
+		let factory = new CharacterHardWrappingLineMapperFactory(
+			configuration.editor.wrappingInfo.wordWrapBreakBeforeCharacters,
+			configuration.editor.wrappingInfo.wordWrapBreakAfterCharacters,
+			configuration.editor.wrappingInfo.wordWrapBreakObtrusiveCharacters
 		);
 
-		const linesCollection = new SplitLinesCollection(
+		let linesCollection = new SplitLinesCollection(
 			model,
 			factory,
 			model.getOptions().tabSize,
-			wrappingInfo.wrappingColumn,
-			fontInfo.typicalFullwidthCharacterWidth / fontInfo.typicalHalfwidthCharacterWidth,
-			wrappingIndent
+			configuration.editor.wrappingInfo.wrappingColumn,
+			configuration.editor.fontInfo.typicalFullwidthCharacterWidth / configuration.editor.fontInfo.typicalHalfwidthCharacterWidth,
+			configuration.editor.wrappingInfo.wrappingIndent
 		);
 
 		callback(linesCollection);

@@ -9,7 +9,6 @@ import { TerminalLinkHandler, LineColumnInfo } from 'vs/workbench/contrib/termin
 import * as strings from 'vs/base/common/strings';
 import { ITerminalInstanceService } from 'vs/workbench/contrib/terminal/browser/terminal';
 import { Event } from 'vs/base/common/event';
-import { ITerminalConfigHelper } from 'vs/workbench/contrib/terminal/common/terminal';
 
 class TestTerminalLinkHandler extends TerminalLinkHandler {
 	public get localLinkRegex(): RegExp {
@@ -36,7 +35,7 @@ class MockTerminalInstanceService implements ITerminalInstanceService {
 	getDefaultShellAndArgs(): Promise<{ shell: string; args: string | string[] | undefined; }> {
 		throw new Error('Method not implemented.');
 	}
-	_serviceBrand: undefined;
+	_serviceBrand: any;
 	getXtermConstructor(): Promise<any> {
 		throw new Error('Method not implemented.');
 	}
@@ -63,19 +62,13 @@ interface LinkFormatInfo {
 	column?: string;
 }
 
-const testConfigHelper: ITerminalConfigHelper = <any>{
-	config: {
-		enableFileLinks: true
-	}
-};
-
 suite('Workbench - TerminalLinkHandler', () => {
 	suite('localLinkRegex', () => {
 		test('Windows', () => {
-			const terminalLinkHandler = new TestTerminalLinkHandler(new TestXterm() as any, {
+			const terminalLinkHandler = new TestTerminalLinkHandler(new TestXterm(), {
 				os: OperatingSystem.Windows,
 				userHome: ''
-			} as any, testConfigHelper, null!, null!, null!, new MockTerminalInstanceService(), null!);
+			} as any, null!, null!, null!, null!, new MockTerminalInstanceService(), null!);
 			function testLink(link: string, linkUrl: string, lineNo?: string, columnNo?: string) {
 				assert.equal(terminalLinkHandler.extractLinkUrl(link), linkUrl);
 				assert.equal(terminalLinkHandler.extractLinkUrl(`:${link}:`), linkUrl);
@@ -128,8 +121,7 @@ suite('Workbench - TerminalLinkHandler', () => {
 					{ urlFormat: '{0}[{1},{2}]', line: '5', column: '3' },
 					{ urlFormat: '{0} [{1},{2}]', line: '5', column: '3' },
 					{ urlFormat: '{0}[{1}, {2}]', line: '5', column: '3' },
-					{ urlFormat: '{0} [{1}, {2}]', line: '5', column: '3' },
-					{ urlFormat: '"{0}",{1}', line: '5' }
+					{ urlFormat: '{0} [{1}, {2}]', line: '5', column: '3' }
 				];
 
 				linkUrls.forEach(linkUrl => {
@@ -148,10 +140,10 @@ suite('Workbench - TerminalLinkHandler', () => {
 		});
 
 		test('Linux', () => {
-			const terminalLinkHandler = new TestTerminalLinkHandler(new TestXterm() as any, {
+			const terminalLinkHandler = new TestTerminalLinkHandler(new TestXterm(), {
 				os: OperatingSystem.Linux,
 				userHome: ''
-			} as any, testConfigHelper, null!, null!, null!, new MockTerminalInstanceService(), null!);
+			} as any, null!, null!, null!, null!, new MockTerminalInstanceService(), null!);
 			function testLink(link: string, linkUrl: string, lineNo?: string, columnNo?: string) {
 				assert.equal(terminalLinkHandler.extractLinkUrl(link), linkUrl);
 				assert.equal(terminalLinkHandler.extractLinkUrl(`:${link}:`), linkUrl);
@@ -193,8 +185,7 @@ suite('Workbench - TerminalLinkHandler', () => {
 					{ urlFormat: '{0}[{1}]', line: '5' },
 					{ urlFormat: '{0} [{1}]', line: '5' },
 					{ urlFormat: '{0}[{1},{2}]', line: '5', column: '3' },
-					{ urlFormat: '{0} [{1},{2}]', line: '5', column: '3' },
-					{ urlFormat: '"{0}",{1}', line: '5' }
+					{ urlFormat: '{0} [{1},{2}]', line: '5', column: '3' }
 				];
 
 				linkUrls.forEach(linkUrl => {
@@ -216,10 +207,10 @@ suite('Workbench - TerminalLinkHandler', () => {
 
 	suite('preprocessPath', () => {
 		test('Windows', () => {
-			const linkHandler = new TestTerminalLinkHandler(new TestXterm() as any, {
+			const linkHandler = new TestTerminalLinkHandler(new TestXterm(), {
 				os: OperatingSystem.Windows,
 				userHome: 'C:\\Users\\Me'
-			} as any, testConfigHelper, null!, null!, null!, new MockTerminalInstanceService(), null!);
+			} as any, null!, null!, null!, null!, new MockTerminalInstanceService(), null!);
 			linkHandler.processCwd = 'C:\\base';
 
 			assert.equal(linkHandler.preprocessPath('./src/file1'), 'C:\\base\\src\\file1');
@@ -229,10 +220,10 @@ suite('Workbench - TerminalLinkHandler', () => {
 			assert.equal(linkHandler.preprocessPath('C:\\absolute\\path\\file5'), 'C:\\absolute\\path\\file5');
 		});
 		test('Windows - spaces', () => {
-			const linkHandler = new TestTerminalLinkHandler(new TestXterm() as any, {
+			const linkHandler = new TestTerminalLinkHandler(new TestXterm(), {
 				os: OperatingSystem.Windows,
 				userHome: 'C:\\Users\\M e'
-			} as any, testConfigHelper, null!, null!, null!, new MockTerminalInstanceService(), null!);
+			} as any, null!, null!, null!, null!, new MockTerminalInstanceService(), null!);
 			linkHandler.processCwd = 'C:\\base dir';
 
 			assert.equal(linkHandler.preprocessPath('./src/file1'), 'C:\\base dir\\src\\file1');
@@ -243,10 +234,10 @@ suite('Workbench - TerminalLinkHandler', () => {
 		});
 
 		test('Linux', () => {
-			const linkHandler = new TestTerminalLinkHandler(new TestXterm() as any, {
+			const linkHandler = new TestTerminalLinkHandler(new TestXterm(), {
 				os: OperatingSystem.Linux,
 				userHome: '/home/me'
-			} as any, testConfigHelper, null!, null!, null!, new MockTerminalInstanceService(), null!);
+			} as any, null!, null!, null!, null!, new MockTerminalInstanceService(), null!);
 			linkHandler.processCwd = '/base';
 
 			assert.equal(linkHandler.preprocessPath('./src/file1'), '/base/src/file1');
@@ -256,10 +247,10 @@ suite('Workbench - TerminalLinkHandler', () => {
 		});
 
 		test('No Workspace', () => {
-			const linkHandler = new TestTerminalLinkHandler(new TestXterm() as any, {
+			const linkHandler = new TestTerminalLinkHandler(new TestXterm(), {
 				os: OperatingSystem.Linux,
 				userHome: '/home/me'
-			} as any, testConfigHelper, null!, null!, null!, new MockTerminalInstanceService(), null!);
+			} as any, null!, null!, null!, null!, new MockTerminalInstanceService(), null!);
 
 			assert.equal(linkHandler.preprocessPath('./src/file1'), null);
 			assert.equal(linkHandler.preprocessPath('src/file2'), null);
@@ -270,10 +261,10 @@ suite('Workbench - TerminalLinkHandler', () => {
 
 	test('gitDiffLinkRegex', () => {
 		// The platform is irrelevant because the links generated by Git are the same format regardless of platform
-		const linkHandler = new TestTerminalLinkHandler(new TestXterm() as any, {
+		const linkHandler = new TestTerminalLinkHandler(new TestXterm(), {
 			os: OperatingSystem.Linux,
 			userHome: ''
-		} as any, testConfigHelper, null!, null!, null!, new MockTerminalInstanceService(), null!);
+		} as any, null!, null!, null!, null!, new MockTerminalInstanceService(), null!);
 
 		function assertAreGoodMatches(matches: RegExpMatchArray | null) {
 			if (matches) {

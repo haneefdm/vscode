@@ -10,26 +10,24 @@ import { localize } from 'vs/nls';
 import { IDialogService } from 'vs/platform/dialogs/common/dialogs';
 import { IEnvironmentService } from 'vs/platform/environment/common/environment';
 import { ILifecycleService, LifecyclePhase } from 'vs/platform/lifecycle/common/lifecycle';
-import product from 'vs/platform/product/common/product';
+import product from 'vs/platform/product/node/product';
+import { IWindowsService } from 'vs/platform/windows/common/windows';
 import { IWorkbenchContribution } from 'vs/workbench/common/contributions';
 import { PerfviewInput } from 'vs/workbench/contrib/performance/electron-browser/perfviewEditor';
 import { IExtensionService } from 'vs/workbench/services/extensions/common/extensions';
 import { IClipboardService } from 'vs/platform/clipboard/common/clipboardService';
 import { URI } from 'vs/base/common/uri';
-import { IOpenerService } from 'vs/platform/opener/common/opener';
-import { IElectronService } from 'vs/platform/electron/node/electron';
 
 export class StartupProfiler implements IWorkbenchContribution {
 
 	constructor(
+		@IWindowsService private readonly _windowsService: IWindowsService,
 		@IDialogService private readonly _dialogService: IDialogService,
 		@IEnvironmentService private readonly _environmentService: IEnvironmentService,
 		@ITextModelService private readonly _textModelResolverService: ITextModelService,
 		@IClipboardService private readonly _clipboardService: IClipboardService,
 		@ILifecycleService lifecycleService: ILifecycleService,
 		@IExtensionService extensionService: IExtensionService,
-		@IOpenerService private readonly _openerService: IOpenerService,
-		@IElectronService private readonly _electronService: IElectronService
 	) {
 		// wait for everything to be ready
 		Promise.all([
@@ -81,7 +79,7 @@ export class StartupProfiler implements IWorkbenchContribution {
 			}).then(res => {
 				if (res.confirmed) {
 					Promise.all<any>([
-						this._electronService.showItemInFolder(URI.file(join(dir, files[0])).fsPath),
+						this._windowsService.showItemInFolder(URI.file(join(dir, files[0]))),
 						this._createPerfIssue(files)
 					]).then(() => {
 						// keep window stable until restart is selected
@@ -93,36 +91,33 @@ export class StartupProfiler implements IWorkbenchContribution {
 							secondaryButton: undefined
 						}).then(() => {
 							// now we are ready to restart
-							this._electronService.relaunch({ removeArgs });
+							this._windowsService.relaunch({ removeArgs });
 						});
 					});
 
 				} else {
 					// simply restart
-					this._electronService.relaunch({ removeArgs });
+					this._windowsService.relaunch({ removeArgs });
 				}
 			});
 		});
 	}
 
-	private async _createPerfIssue(files: string[]): Promise<void> {
-		const reportIssueUrl = product.reportIssueUrl;
-		if (!reportIssueUrl) {
-			return;
-		}
+	private _createPerfIssue(files: string[]): Promise<void> {
+		return this._textModelResolverService.createModelReference(PerfviewInput.Uri).then(ref => {
 
-		const ref = await this._textModelResolverService.createModelReference(PerfviewInput.Uri);
-		await this._clipboardService.writeText(ref.object.textEditorModel.getValue());
-		ref.dispose();
+			this._clipboardService.writeText(ref.object.textEditorModel.getValue());
+			ref.dispose();
 
-		const body = `
+			const body = `
 1. :warning: We have copied additional data to your clipboard. Make sure to **paste** here. :warning:
 1. :warning: Make sure to **attach** these files from your *home*-directory: :warning:\n${files.map(file => `-\`${file}\``).join('\n')}
 `;
 
-		const baseUrl = reportIssueUrl;
-		const queryStringPrefix = baseUrl.indexOf('?') === -1 ? '?' : '&';
+			const baseUrl = product.reportIssueUrl;
+			const queryStringPrefix = baseUrl.indexOf('?') === -1 ? '?' : '&';
 
-		this._openerService.open(URI.parse(`${baseUrl}${queryStringPrefix}body=${encodeURIComponent(body)}`));
+			window.open(`${baseUrl}${queryStringPrefix}body=${encodeURIComponent(body)}`);
+		});
 	}
 }

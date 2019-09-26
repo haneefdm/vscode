@@ -25,7 +25,6 @@ export enum SettingValueType {
 	Integer = 'integer',
 	Number = 'number',
 	Boolean = 'boolean',
-	ArrayOfString = 'array-of-string',
 	Exclude = 'exclude',
 	Complex = 'complex',
 	NullableInteger = 'nullable-integer',
@@ -62,7 +61,6 @@ export interface ISetting {
 
 	scope?: ConfigurationScope;
 	type?: string | string[];
-	arrayItemType?: string;
 	enum?: string[];
 	enumDescriptions?: string[];
 	enumDescriptionsAreMarkdown?: boolean;
@@ -167,11 +165,19 @@ export class SettingsEditorOptions extends EditorOptions implements ISettingsEdi
 
 	static create(settings: ISettingsEditorOptions): SettingsEditorOptions {
 		const options = new SettingsEditorOptions();
-		options.overwrite(settings);
 
 		options.target = settings.target;
 		options.folderUri = settings.folderUri;
 		options.query = settings.query;
+
+		// IEditorOptions
+		options.preserveFocus = settings.preserveFocus;
+		options.forceReload = settings.forceReload;
+		options.revealIfVisible = settings.revealIfVisible;
+		options.revealIfOpened = settings.revealIfOpened;
+		options.pinned = settings.pinned;
+		options.index = settings.index;
+		options.inactive = settings.inactive;
 
 		return options;
 	}
@@ -183,25 +189,25 @@ export interface IKeybindingsEditorModel<T> extends IPreferencesEditorModel<T> {
 export const IPreferencesService = createDecorator<IPreferencesService>('preferencesService');
 
 export interface IPreferencesService {
-	_serviceBrand: undefined;
+	_serviceBrand: any;
 
 	userSettingsResource: URI;
 	workspaceSettingsResource: URI | null;
 	getFolderSettingsResource(resource: URI): URI | null;
 
 	resolveModel(uri: URI): Promise<ITextModel | null>;
-	createPreferencesEditorModel<T>(uri: URI): Promise<IPreferencesEditorModel<T> | null>;
+	createPreferencesEditorModel<T>(uri: URI): Promise<IPreferencesEditorModel<T>>;
 	createSettings2EditorModel(): Settings2EditorModel; // TODO
 
-	openRawDefaultSettings(): Promise<IEditor | undefined>;
-	openSettings(jsonEditor: boolean | undefined, query: string | undefined): Promise<IEditor | undefined>;
-	openGlobalSettings(jsonEditor?: boolean, options?: ISettingsEditorOptions, group?: IEditorGroup): Promise<IEditor | undefined>;
-	openRemoteSettings(): Promise<IEditor | undefined>;
-	openWorkspaceSettings(jsonEditor?: boolean, options?: ISettingsEditorOptions, group?: IEditorGroup): Promise<IEditor | undefined>;
-	openFolderSettings(folder: URI, jsonEditor?: boolean, options?: ISettingsEditorOptions, group?: IEditorGroup): Promise<IEditor | undefined>;
+	openRawDefaultSettings(): Promise<IEditor | null>;
+	openSettings(jsonEditor: boolean | undefined, query: string | undefined): Promise<IEditor | null>;
+	openGlobalSettings(jsonEditor?: boolean, options?: ISettingsEditorOptions, group?: IEditorGroup): Promise<IEditor | null>;
+	openRemoteSettings(): Promise<IEditor | null>;
+	openWorkspaceSettings(jsonEditor?: boolean, options?: ISettingsEditorOptions, group?: IEditorGroup): Promise<IEditor | null>;
+	openFolderSettings(folder: URI, jsonEditor?: boolean, options?: ISettingsEditorOptions, group?: IEditorGroup): Promise<IEditor | null>;
 	switchSettings(target: ConfigurationTarget, resource: URI, jsonEditor?: boolean): Promise<void>;
 	openGlobalKeybindingSettings(textual: boolean): Promise<void>;
-	openDefaultKeybindingsFile(): Promise<IEditor | undefined>;
+	openDefaultKeybindingsFile(): Promise<IEditor | null>;
 
 	configureSettingsForLanguage(language: string | null): void;
 }

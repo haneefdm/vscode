@@ -77,7 +77,7 @@ export class Tree implements _.ITree {
 	readonly onDidExpandItem: Event<Model.IItemExpandEvent> = this._onDidExpandItem.event;
 	private _onDidCollapseItem = new Relay<Model.IItemCollapseEvent>();
 	readonly onDidCollapseItem: Event<Model.IItemCollapseEvent> = this._onDidCollapseItem.event;
-	private readonly _onDispose = new Emitter<void>();
+	private _onDispose = new Emitter<void>();
 	readonly onDidDispose: Event<void> = this._onDispose.event;
 
 	constructor(container: HTMLElement, configuration: _.ITreeConfiguration, options: _.ITreeOptions = {}) {
@@ -110,15 +110,15 @@ export class Tree implements _.ITree {
 	}
 
 	get onDidFocus(): Event<void> {
-		return this.view.onDOMFocus;
+		return this.view && this.view.onDOMFocus;
 	}
 
 	get onDidBlur(): Event<void> {
-		return this.view.onDOMBlur;
+		return this.view && this.view.onDOMBlur;
 	}
 
 	get onDidScroll(): Event<void> {
-		return this.view.onDidScroll;
+		return this.view && this.view.onDidScroll;
 	}
 
 	public getHTMLElement(): HTMLElement {
@@ -263,8 +263,16 @@ export class Tree implements _.ITree {
 
 	public dispose(): void {
 		this._onDispose.fire();
-		this.model.dispose();
-		this.view.dispose();
+
+		if (this.model !== null) {
+			this.model.dispose();
+			this.model = null!; // StrictNullOverride Nulling out ok in dispose
+		}
+		if (this.view !== null) {
+			this.view.dispose();
+			this.view = null!; // StrictNullOverride Nulling out ok in dispose
+		}
+
 		this._onDidChangeFocus.dispose();
 		this._onDidChangeSelection.dispose();
 		this._onHighlightChange.dispose();

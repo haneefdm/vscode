@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { URI } from 'vs/base/common/uri';
-import { createDecorator, IInstantiationService } from 'vs/platform/instantiation/common/instantiation';
+import { createDecorator, IInstantiationService, ServiceIdentifier } from 'vs/platform/instantiation/common/instantiation';
 import * as arrays from 'vs/base/common/arrays';
 import { UntitledEditorInput } from 'vs/workbench/common/editor/untitledEditorInput';
 import { IFilesConfiguration, IFileService } from 'vs/platform/files/common/files';
@@ -29,7 +29,7 @@ export interface IModelLoadOrCreateOptions {
 
 export interface IUntitledEditorService {
 
-	_serviceBrand: undefined;
+	_serviceBrand: ServiceIdentifier<IUntitledEditorService>;
 
 	/**
 	 * Events for when untitled editors content changes (e.g. any keystroke).
@@ -65,11 +65,6 @@ export interface IUntitledEditorService {
 	 * Returns true if the provided resource is dirty.
 	 */
 	isDirty(resource: URI): boolean;
-
-	/**
-	 * Find out if a backup with the provided resource exists and has a backup on disk.
-	 */
-	hasBackup(resource: URI): boolean;
 
 	/**
 	 * Reverts the untitled resources if found.
@@ -112,22 +107,22 @@ export interface IUntitledEditorService {
 
 export class UntitledEditorService extends Disposable implements IUntitledEditorService {
 
-	_serviceBrand: undefined;
+	_serviceBrand: ServiceIdentifier<any>;
 
 	private mapResourceToInput = new ResourceMap<UntitledEditorInput>();
 	private mapResourceToAssociatedFilePath = new ResourceMap<boolean>();
 
 	private readonly _onDidChangeContent: Emitter<URI> = this._register(new Emitter<URI>());
-	readonly onDidChangeContent: Event<URI> = this._onDidChangeContent.event;
+	get onDidChangeContent(): Event<URI> { return this._onDidChangeContent.event; }
 
 	private readonly _onDidChangeDirty: Emitter<URI> = this._register(new Emitter<URI>());
-	readonly onDidChangeDirty: Event<URI> = this._onDidChangeDirty.event;
+	get onDidChangeDirty(): Event<URI> { return this._onDidChangeDirty.event; }
 
 	private readonly _onDidChangeEncoding: Emitter<URI> = this._register(new Emitter<URI>());
-	readonly onDidChangeEncoding: Event<URI> = this._onDidChangeEncoding.event;
+	get onDidChangeEncoding(): Event<URI> { return this._onDidChangeEncoding.event; }
 
 	private readonly _onDidDisposeModel: Emitter<URI> = this._register(new Emitter<URI>());
-	readonly onDidDisposeModel: Event<URI> = this._onDidDisposeModel.event;
+	get onDidDisposeModel(): Event<URI> { return this._onDidDisposeModel.event; }
 
 	constructor(
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
@@ -173,12 +168,6 @@ export class UntitledEditorService extends Disposable implements IUntitledEditor
 		const input = this.get(resource);
 
 		return input ? input.isDirty() : false;
-	}
-
-	hasBackup(resource: URI): boolean {
-		const input = this.get(resource);
-
-		return input ? input.hasBackup() : false;
 	}
 
 	getDirty(resources?: URI[]): URI[] {
@@ -245,10 +234,21 @@ export class UntitledEditorService extends Disposable implements IUntitledEditor
 
 		const input = this.instantiationService.createInstance(UntitledEditorInput, untitledResource, hasAssociatedFilePath, mode, initialValue, encoding);
 
-		const contentListener = input.onDidModelChangeContent(() => this._onDidChangeContent.fire(untitledResource));
-		const dirtyListener = input.onDidChangeDirty(() => this._onDidChangeDirty.fire(untitledResource));
-		const encodingListener = input.onDidModelChangeEncoding(() => this._onDidChangeEncoding.fire(untitledResource));
-		const disposeListener = input.onDispose(() => this._onDidDisposeModel.fire(untitledResource));
+		const contentListener = input.onDidModelChangeContent(() => {
+			this._onDidChangeContent.fire(untitledResource);
+		});
+
+		const dirtyListener = input.onDidChangeDirty(() => {
+			this._onDidChangeDirty.fire(untitledResource);
+		});
+
+		const encodingListener = input.onDidModelChangeEncoding(() => {
+			this._onDidChangeEncoding.fire(untitledResource);
+		});
+
+		const disposeListener = input.onDispose(() => {
+			this._onDidDisposeModel.fire(untitledResource);
+		});
 
 		// Remove from cache on dispose
 		const onceDispose = Event.once(input.onDispose);

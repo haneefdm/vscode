@@ -10,8 +10,8 @@ import { xhr, XHRResponse, getErrorStatusDescription } from 'request-light';
 
 const localize = nls.loadMessageBundle();
 
-import { workspace, window, languages, commands, ExtensionContext, extensions, Uri, LanguageConfiguration, Diagnostic, StatusBarAlignment, TextEditor } from 'vscode';
-import { LanguageClient, LanguageClientOptions, RequestType, ServerOptions, TransportKind, NotificationType, DidChangeConfigurationNotification, HandleDiagnosticsSignature, ResponseError } from 'vscode-languageclient';
+import { workspace, window, languages, commands, ExtensionContext, extensions, Uri, LanguageConfiguration, Diagnostic, StatusBarAlignment, TextEditor, TextDocument, Position, SelectionRange } from 'vscode';
+import { LanguageClient, LanguageClientOptions, RequestType, ServerOptions, TransportKind, NotificationType, DidChangeConfigurationNotification, HandleDiagnosticsSignature } from 'vscode-languageclient';
 import TelemetryReporter from 'vscode-extension-telemetry';
 
 import { hash } from './utils/hash';
@@ -145,14 +145,11 @@ export function activate(context: ExtensionContext) {
 			}
 		});
 
-		const schemaDocuments: { [uri: string]: boolean } = {};
-
 		// handle content request
 		client.onRequest(VSCodeContentRequest.type, (uriPath: string) => {
 			let uri = Uri.parse(uriPath);
 			if (uri.scheme !== 'http' && uri.scheme !== 'https') {
 				return workspace.openTextDocument(uri).then(doc => {
-					schemaDocuments[uri.toString()] = true;
 					return doc.getText();
 				}, error => {
 					return Promise.reject(error);
@@ -162,17 +159,15 @@ export function activate(context: ExtensionContext) {
 				return xhr({ url: uriPath, followRedirects: 5, headers }).then(response => {
 					return response.responseText;
 				}, (error: XHRResponse) => {
-					return Promise.reject(new ResponseError(error.status, error.responseText || getErrorStatusDescription(error.status) || error.toString()));
+					return Promise.reject(error.responseText || getErrorStatusDescription(error.status) || error.toString());
 				});
 			}
 		});
 
-		let handleContentChange = (uriString: string) => {
-			if (schemaDocuments[uriString]) {
-				client.sendNotification(SchemaContentChangeNotification.type, uriString);
-				return true;
+		let handleContentChange = (uri: Uri) => {
+			if (uri.scheme === 'vscode' && uri.authority === 'schemas') {
+				client.sendNotification(SchemaContentChangeNotification.type, uri.toString());
 			}
-			return false;
 		};
 
 		let handleActiveEditorChange = (activeEditor?: TextEditor) => {
@@ -189,13 +184,10 @@ export function activate(context: ExtensionContext) {
 			}
 		};
 
-		toDispose.push(workspace.onDidChangeTextDocument(e => handleContentChange(e.document.uri.toString())));
+		toDispose.push(workspace.onDidChangeTextDocument(e => handleContentChange(e.document.uri)));
 		toDispose.push(workspace.onDidCloseTextDocument(d => {
-			const uriString = d.uri.toString();
-			if (handleContentChange(uriString)) {
-				delete schemaDocuments[uriString];
-			}
-			fileSchemaErrors.delete(uriString);
+			handleContentChange(d.uri);
+			fileSchemaErrors.delete(d.uri.toString());
 		}));
 		toDispose.push(window.onDidChangeActiveTextEditor(handleActiveEditorChange));
 
@@ -224,6 +216,26 @@ export function activate(context: ExtensionContext) {
 		extensions.onDidChange(_ => {
 			client.sendNotification(SchemaAssociationNotification.type, getSchemaAssociation(context));
 		});
+
+		documentSelector.forEach(selector => {
+			toDispose.push(languages.registerSelectionRangeProvider(selector, {
+				async provideSelectionRanges(document: TextDocument, positions: Position[]): Promise<SelectionRange[]> {
+					const textDocument = client.code2ProtocolConverter.asTextDocumentIdentifier(document);
+					const rawResult = await client.sendRequest<SelectionRange[][]>('$/textDocument/selectionRanges', { textDocument, positions: positions.map(client.code2ProtocolConverter.asPosition) });
+					if (Array.isArray(rawResult)) {
+						return rawResult.map(rawSelectionRanges => {
+							return rawSelectionRanges.reduceRight((parent: SelectionRange | undefined, selectionRange: SelectionRange) => {
+								return {
+									range: client.protocol2CodeConverter.asRange(selectionRange.range),
+									parent,
+								};
+							}, undefined)!;
+						});
+					}
+					return [];
+				}
+			}));
+		});
 	});
 
 
@@ -231,7 +243,7 @@ export function activate(context: ExtensionContext) {
 	let languageConfiguration: LanguageConfiguration = {
 		wordPattern: /("(?:[^\\\"]*(?:\\.)?)*"?)|[^\s{}\[\],:]+/,
 		indentationRules: {
-			increaseIndentPattern: /({+(?=([^"]*"[^"]*")*[^"}]*$))|(\[+(?=([^"]*"[^"]*")*[^"\]]*$))/,
+			increaseIndentPattern: /^.*(\{[^}]*|\[[^\]]*)$/,
 			decreaseIndentPattern: /^\s*[}\]],?\s*$/
 		}
 	};

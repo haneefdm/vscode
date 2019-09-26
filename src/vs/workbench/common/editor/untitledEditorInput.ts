@@ -7,6 +7,7 @@ import { URI } from 'vs/base/common/uri';
 import { suggestFilename } from 'vs/base/common/mime';
 import { memoize } from 'vs/base/common/decorators';
 import { PLAINTEXT_MODE_ID } from 'vs/editor/common/modes/modesRegistry';
+import { basename } from 'vs/base/common/path';
 import { basenameOrAuthority, dirname } from 'vs/base/common/resources';
 import { EditorInput, IEncodingSupport, EncodingMode, ConfirmResult, Verbosity, IModeSupport } from 'vs/workbench/common/editor';
 import { UntitledEditorModel } from 'vs/workbench/common/editor/untitledEditorModel';
@@ -23,14 +24,14 @@ export class UntitledEditorInput extends EditorInput implements IEncodingSupport
 
 	static readonly ID: string = 'workbench.editors.untitledEditorInput';
 
-	private cachedModel: UntitledEditorModel | null = null;
-	private modelResolve: Promise<UntitledEditorModel & IResolvedTextEditorModel> | null = null;
+	private cachedModel: UntitledEditorModel | null;
+	private modelResolve: Promise<UntitledEditorModel & IResolvedTextEditorModel> | null;
 
 	private readonly _onDidModelChangeContent: Emitter<void> = this._register(new Emitter<void>());
-	readonly onDidModelChangeContent: Event<void> = this._onDidModelChangeContent.event;
+	get onDidModelChangeContent(): Event<void> { return this._onDidModelChangeContent.event; }
 
 	private readonly _onDidModelChangeEncoding: Emitter<void> = this._register(new Emitter<void>());
-	readonly onDidModelChangeEncoding: Event<void> = this._onDidModelChangeEncoding.event;
+	get onDidModelChangeEncoding(): Event<void> { return this._onDidModelChangeEncoding.event; }
 
 	constructor(
 		private readonly resource: URI,
@@ -63,7 +64,7 @@ export class UntitledEditorInput extends EditorInput implements IEncodingSupport
 
 	@memoize
 	private get shortDescription(): string {
-		return this.labelService.getUriBasenameLabel(dirname(this.resource));
+		return basename(this.labelService.getUriLabel(dirname(this.resource)));
 	}
 
 	@memoize
@@ -76,9 +77,9 @@ export class UntitledEditorInput extends EditorInput implements IEncodingSupport
 		return this.labelService.getUriLabel(dirname(this.resource));
 	}
 
-	getDescription(verbosity: Verbosity = Verbosity.MEDIUM): string | undefined {
+	getDescription(verbosity: Verbosity = Verbosity.MEDIUM): string | null {
 		if (!this.hasAssociatedFilePath) {
-			return undefined;
+			return null;
 		}
 
 		switch (verbosity) {
@@ -107,7 +108,7 @@ export class UntitledEditorInput extends EditorInput implements IEncodingSupport
 		return this.labelService.getUriLabel(this.resource);
 	}
 
-	getTitle(verbosity: Verbosity): string | undefined {
+	getTitle(verbosity: Verbosity): string | null {
 		if (!this.hasAssociatedFilePath) {
 			return this.getName();
 		}
@@ -121,7 +122,7 @@ export class UntitledEditorInput extends EditorInput implements IEncodingSupport
 				return this.longTitle;
 		}
 
-		return undefined;
+		return null;
 	}
 
 	isDirty(): boolean {
@@ -136,14 +137,6 @@ export class UntitledEditorInput extends EditorInput implements IEncodingSupport
 
 		// untitled files with an associated path or associated resource
 		return this.hasAssociatedFilePath;
-	}
-
-	hasBackup(): boolean {
-		if (this.cachedModel) {
-			return this.cachedModel.hasBackup();
-		}
-
-		return false;
 	}
 
 	confirmSave(): Promise<ConfirmResult> {

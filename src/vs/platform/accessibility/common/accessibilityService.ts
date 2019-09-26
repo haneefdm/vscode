@@ -3,23 +3,17 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { Emitter, Event } from 'vs/base/common/event';
 import { IAccessibilityService, AccessibilitySupport } from 'vs/platform/accessibility/common/accessibility';
-import { IContextKeyService } from 'vs/platform/contextkey/common/contextkey';
-import { IConfigurationService } from 'vs/platform/configuration/common/configuration';
-import { AbstractAccessibilityService } from 'vs/platform/accessibility/common/abstractAccessibilityService';
+import { Disposable } from 'vs/base/common/lifecycle';
 
-export class BrowserAccessibilityService extends AbstractAccessibilityService implements IAccessibilityService {
+export class BrowserAccessibilityService extends Disposable implements IAccessibilityService {
 
-	_serviceBrand: undefined;
+	_serviceBrand: any;
 
 	private _accessibilitySupport = AccessibilitySupport.Unknown;
-
-	constructor(
-		@IContextKeyService readonly contextKeyService: IContextKeyService,
-		@IConfigurationService readonly configurationService: IConfigurationService,
-	) {
-		super(contextKeyService, configurationService);
-	}
+	private readonly _onDidChangeAccessibilitySupport = new Emitter<void>();
+	readonly onDidChangeAccessibilitySupport: Event<void> = this._onDidChangeAccessibilitySupport.event;
 
 	alwaysUnderlineAccessKeys(): Promise<boolean> {
 		return Promise.resolve(false);

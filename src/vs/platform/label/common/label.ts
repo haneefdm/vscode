@@ -14,14 +14,13 @@ import { isEqualOrParent, basename } from 'vs/base/common/resources';
 import { endsWith } from 'vs/base/common/strings';
 
 export interface ILabelService {
-	_serviceBrand: undefined;
+	_serviceBrand: any;
 	/**
 	 * Gets the human readable label for a uri.
 	 * If relative is passed returns a label relative to the workspace root that the uri belongs to.
 	 * If noPrefix is passed does not tildify the label and also does not prepand the root name for relative labels in a multi root scenario.
 	 */
 	getUriLabel(resource: URI, options?: { relative?: boolean, noPrefix?: boolean, endWithSeparator?: boolean }): string;
-	getUriBasenameLabel(resource: URI): string;
 	getWorkspaceLabel(workspace: (IWorkspaceIdentifier | ISingleFolderWorkspaceIdentifier | IWorkspace), options?: { verbose: boolean }): string;
 	getHostLabel(scheme: string, authority?: string): string;
 	getSeparator(scheme: string, authority?: string): '/' | '\\';

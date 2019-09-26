@@ -8,7 +8,7 @@ import { URI } from 'vs/base/common/uri';
 import { getConfigurationKeys, IConfigurationOverrides, IConfigurationService, getConfigurationValue, isConfigurationOverrides } from 'vs/platform/configuration/common/configuration';
 
 export class TestConfigurationService implements IConfigurationService {
-	public _serviceBrand: undefined;
+	public _serviceBrand: any;
 
 	private configuration = Object.create(null);
 

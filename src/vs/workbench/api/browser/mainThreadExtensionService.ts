@@ -12,13 +12,11 @@ import { ExtensionIdentifier, IExtensionDescription } from 'vs/platform/extensio
 import { INotificationService } from 'vs/platform/notification/common/notification';
 import { localize } from 'vs/nls';
 import { Action } from 'vs/base/common/actions';
-import { IExtensionEnablementService, EnablementState } from 'vs/workbench/services/extensionManagement/common/extensionManagement';
+import { EnablementState } from 'vs/platform/extensionManagement/common/extensionManagement';
 import { areSameExtensions } from 'vs/platform/extensionManagement/common/extensionManagementUtil';
-import { IHostService } from 'vs/workbench/services/host/browser/host';
-import { IExtensionsWorkbenchService } from 'vs/workbench/contrib/extensions/common/extensions';
+import { IWindowService } from 'vs/platform/windows/common/windows';
+import { IExtensionsWorkbenchService, IExtension } from 'vs/workbench/contrib/extensions/common/extensions';
 import { CancellationToken } from 'vs/base/common/cancellation';
-import { ILocalExtension } from 'vs/platform/extensionManagement/common/extensionManagement';
-import { ExtensionActivationReason } from 'vs/workbench/api/common/extHostExtensionActivator';
 
 @extHostNamedCustomer(MainContext.MainThreadExtensionService)
 export class MainThreadExtensionService implements MainThreadExtensionServiceShape {
@@ -26,35 +24,32 @@ export class MainThreadExtensionService implements MainThreadExtensionServiceSha
 	private readonly _extensionService: IExtensionService;
 	private readonly _notificationService: INotificationService;
 	private readonly _extensionsWorkbenchService: IExtensionsWorkbenchService;
-	private readonly _hostService: IHostService;
-	private readonly _extensionEnablementService: IExtensionEnablementService;
+	private readonly _windowService: IWindowService;
 
 	constructor(
 		extHostContext: IExtHostContext,
 		@IExtensionService extensionService: IExtensionService,
 		@INotificationService notificationService: INotificationService,
 		@IExtensionsWorkbenchService extensionsWorkbenchService: IExtensionsWorkbenchService,
-		@IHostService hostService: IHostService,
-		@IExtensionEnablementService extensionEnablementService: IExtensionEnablementService
+		@IWindowService windowService: IWindowService
 	) {
 		this._extensionService = extensionService;
 		this._notificationService = notificationService;
 		this._extensionsWorkbenchService = extensionsWorkbenchService;
-		this._hostService = hostService;
-		this._extensionEnablementService = extensionEnablementService;
+		this._windowService = windowService;
 	}
 
 	public dispose(): void {
 	}
 
-	$activateExtension(extensionId: ExtensionIdentifier, reason: ExtensionActivationReason): Promise<void> {
-		return this._extensionService._activateById(extensionId, reason);
+	$activateExtension(extensionId: ExtensionIdentifier, activationEvent: string): Promise<void> {
+		return this._extensionService._activateById(extensionId, activationEvent);
 	}
 	$onWillActivateExtension(extensionId: ExtensionIdentifier): void {
 		this._extensionService._onWillActivateExtension(extensionId);
 	}
-	$onDidActivateExtension(extensionId: ExtensionIdentifier, codeLoadingTime: number, activateCallTime: number, activateResolvedTime: number, activationReason: ExtensionActivationReason): void {
-		this._extensionService._onDidActivateExtension(extensionId, codeLoadingTime, activateCallTime, activateResolvedTime, activationReason);
+	$onDidActivateExtension(extensionId: ExtensionIdentifier, startup: boolean, codeLoadingTime: number, activateCallTime: number, activateResolvedTime: number, activationEvent: string): void {
+		this._extensionService._onDidActivateExtension(extensionId, startup, codeLoadingTime, activateCallTime, activateResolvedTime, activationEvent);
 	}
 	$onExtensionRuntimeError(extensionId: ExtensionIdentifier, data: SerializedError): void {
 		const error = new Error();
@@ -79,32 +74,31 @@ export class MainThreadExtensionService implements MainThreadExtensionServiceSha
 			const local = await this._extensionsWorkbenchService.queryLocal();
 			const installedDependency = local.filter(i => areSameExtensions(i.identifier, { id: missingDependency }))[0];
 			if (installedDependency) {
-				await this._handleMissingInstalledDependency(extension, installedDependency.local!);
+				await this._handleMissingInstalledDependency(extension, installedDependency);
 			} else {
 				await this._handleMissingNotInstalledDependency(extension, missingDependency);
 			}
 		}
 	}
 
-	private async _handleMissingInstalledDependency(extension: IExtensionDescription, missingInstalledDependency: ILocalExtension): Promise<void> {
+	private async _handleMissingInstalledDependency(extension: IExtensionDescription, missingInstalledDependency: IExtension): Promise<void> {
 		const extName = extension.displayName || extension.name;
-		if (this._extensionEnablementService.isEnabled(missingInstalledDependency)) {
+		if (missingInstalledDependency.enablementState === EnablementState.Enabled || missingInstalledDependency.enablementState === EnablementState.WorkspaceEnabled) {
 			this._notificationService.notify({
 				severity: Severity.Error,
-				message: localize('reload window', "Cannot activate the '{0}' extension because it depends on the '{1}' extension, which is not loaded. Would you like to reload the window to load the extension?", extName, missingInstalledDependency.manifest.displayName || missingInstalledDependency.manifest.name),
+				message: localize('reload window', "Cannot activate the '{0}' extension because it depends on the '{1}' extension, which is not loaded. Would you like to reload the window to load the extension?", extName, missingInstalledDependency.displayName),
 				actions: {
-					primary: [new Action('reload', localize('reload', "Reload Window"), '', true, () => this._hostService.reload())]
+					primary: [new Action('reload', localize('reload', "Reload Window"), '', true, () => this._windowService.reloadWindow())]
 				}
 			});
 		} else {
-			const enablementState = this._extensionEnablementService.getEnablementState(missingInstalledDependency);
 			this._notificationService.notify({
 				severity: Severity.Error,
-				message: localize('disabledDep', "Cannot activate the '{0}' extension because it depends on the '{1}' extension, which is disabled. Would you like to enable the extension and reload the window?", extName, missingInstalledDependency.manifest.displayName || missingInstalledDependency.manifest.name),
+				message: localize('disabledDep', "Cannot activate the '{0}' extension because it depends on the '{1}' extension, which is disabled. Would you like to enable the extension and reload the window?", extName, missingInstalledDependency.displayName),
 				actions: {
 					primary: [new Action('enable', localize('enable dep', "Enable and Reload"), '', true,
-						() => this._extensionEnablementService.setEnablement([missingInstalledDependency], enablementState === EnablementState.DisabledGlobally ? EnablementState.EnabledGlobally : EnablementState.EnabledWorkspace)
-							.then(() => this._hostService.reload(), e => this._notificationService.error(e)))]
+						() => this._extensionsWorkbenchService.setEnablement([missingInstalledDependency], missingInstalledDependency.enablementState === EnablementState.Disabled ? EnablementState.Enabled : EnablementState.WorkspaceEnabled)
+							.then(() => this._windowService.reloadWindow(), e => this._notificationService.error(e)))]
 				}
 			});
 		}
@@ -120,7 +114,7 @@ export class MainThreadExtensionService implements MainThreadExtensionServiceSha
 				actions: {
 					primary: [new Action('install', localize('install missing dep', "Install and Reload"), '', true,
 						() => this._extensionsWorkbenchService.install(dependencyExtension)
-							.then(() => this._hostService.reload(), e => this._notificationService.error(e)))]
+							.then(() => this._windowService.reloadWindow(), e => this._notificationService.error(e)))]
 				}
 			});
 		} else {

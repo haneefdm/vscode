@@ -7,14 +7,17 @@
  * An interface for a JavaScript object that
  * acts a dictionary. The keys are strings.
  */
-export type IStringDictionary<V> = Record<string, V>;
-
+export interface IStringDictionary<V> {
+	[name: string]: V;
+}
 
 /**
  * An interface for a JavaScript object that
  * acts a dictionary. The keys are numbers.
  */
-export type INumberDictionary<V> = Record<number, V>;
+export interface INumberDictionary<V> {
+	[idx: number]: V;
+}
 
 const hasOwnProperty = Object.prototype.hasOwnProperty;
 
@@ -92,12 +95,6 @@ export function fromMap<T>(original: Map<string, T>): IStringDictionary<T> {
 			result[key] = value;
 		});
 	}
-	return result;
-}
-
-export function mapValues<V>(map: Map<any, V>): V[] {
-	const result: V[] = [];
-	map.forEach(v => result.push(v));
 	return result;
 }
 

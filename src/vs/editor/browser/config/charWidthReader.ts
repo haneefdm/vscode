@@ -93,7 +93,8 @@ class DomCharWidthReader {
 		container.appendChild(italicDomNode);
 
 		const testElements: HTMLSpanElement[] = [];
-		for (const request of this._requests) {
+		for (let i = 0, len = this._requests.length; i < len; i++) {
+			const request = this._requests[i];
 
 			let parent: HTMLElement;
 			if (request.type === CharWidthRequestType.Regular) {
@@ -112,7 +113,7 @@ class DomCharWidthReader {
 			DomCharWidthReader._render(testElement, request);
 			parent!.appendChild(testElement);
 
-			testElements.push(testElement);
+			testElements[i] = testElement;
 		}
 
 		this._container = container;

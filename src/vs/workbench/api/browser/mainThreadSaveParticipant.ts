@@ -10,6 +10,7 @@ import { IActiveCodeEditor } from 'vs/editor/browser/editorBrowser';
 import { IBulkEditService } from 'vs/editor/browser/services/bulkEditService';
 import { ICodeEditorService } from 'vs/editor/browser/services/codeEditorService';
 import { trimTrailingWhitespace } from 'vs/editor/common/commands/trimTrailingWhitespaceCommand';
+import { ICodeActionsOnSaveOptions } from 'vs/editor/common/config/editorOptions';
 import { EditOperation } from 'vs/editor/common/core/editOperation';
 import { Position } from 'vs/editor/common/core/position';
 import { Range } from 'vs/editor/common/core/range';
@@ -32,10 +33,6 @@ import { extHostCustomer } from 'vs/workbench/api/common/extHostCustomers';
 import { TextFileEditorModel } from 'vs/workbench/services/textfile/common/textFileEditorModel';
 import { ISaveParticipant, SaveReason, IResolvedTextFileEditorModel } from 'vs/workbench/services/textfile/common/textfiles';
 import { ExtHostContext, ExtHostDocumentSaveParticipantShape, IExtHostContext } from '../common/extHost.protocol';
-
-export interface ICodeActionsOnSaveOptions {
-	[kind: string]: boolean;
-}
 
 export interface ISaveParticipantParticipant extends ISaveParticipant {
 	// progressMessage: string;
@@ -127,12 +124,16 @@ export class FinalNewLineParticipant implements ISaveParticipantParticipant {
 			return;
 		}
 
-		const edits = [EditOperation.insert(new Position(lineCount, model.getLineMaxColumn(lineCount)), model.getEOL())];
+		let prevSelection: Selection[] = [];
 		const editor = findEditor(model, this.codeEditorService);
 		if (editor) {
-			editor.executeEdits('insertFinalNewLine', edits, editor.getSelections());
-		} else {
-			model.pushEditOperations([], edits, () => null);
+			prevSelection = editor.getSelections();
+		}
+
+		model.pushEditOperations(prevSelection, [EditOperation.insert(new Position(lineCount, model.getLineMaxColumn(lineCount)), model.getEOL())], edits => prevSelection);
+
+		if (editor) {
+			editor.setSelections(prevSelection);
 		}
 	}
 }
@@ -246,8 +247,7 @@ class CodeActionOnSaveParticipant implements ISaveParticipant {
 	constructor(
 		@IBulkEditService private readonly _bulkEditService: IBulkEditService,
 		@ICommandService private readonly _commandService: ICommandService,
-		@IConfigurationService private readonly _configurationService: IConfigurationService,
-		@IInstantiationService private readonly _instantiationService: IInstantiationService,
+		@IConfigurationService private readonly _configurationService: IConfigurationService
 	) { }
 
 	async participate(editorModel: IResolvedTextFileEditorModel, env: { reason: SaveReason }): Promise<void> {
@@ -313,7 +313,7 @@ class CodeActionOnSaveParticipant implements ISaveParticipant {
 
 	private async applyCodeActions(actionsToRun: readonly CodeAction[]) {
 		for (const action of actionsToRun) {
-			await this._instantiationService.invokeFunction(applyCodeAction, action, this._bulkEditService, this._commandService);
+			await applyCodeAction(action, this._bulkEditService, this._commandService);
 		}
 	}
 

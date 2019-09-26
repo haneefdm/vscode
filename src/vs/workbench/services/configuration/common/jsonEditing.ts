@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { URI } from 'vs/base/common/uri';
-import { createDecorator } from 'vs/platform/instantiation/common/instantiation';
+import { createDecorator, ServiceIdentifier } from 'vs/platform/instantiation/common/instantiation';
 
 export const IJSONEditingService = createDecorator<IJSONEditingService>('jsonEditingService');
 
@@ -34,7 +34,7 @@ export interface IJSONValue {
 
 export interface IJSONEditingService {
 
-	_serviceBrand: undefined;
+	_serviceBrand: ServiceIdentifier<any>;
 
-	write(resource: URI, values: IJSONValue[], save: boolean): Promise<void>;
+	write(resource: URI, value: IJSONValue, save: boolean): Promise<void>;
 }

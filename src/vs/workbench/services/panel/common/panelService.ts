@@ -5,7 +5,7 @@
 
 import { Event } from 'vs/base/common/event';
 import { IPanel } from 'vs/workbench/common/panel';
-import { createDecorator } from 'vs/platform/instantiation/common/instantiation';
+import { createDecorator, ServiceIdentifier } from 'vs/platform/instantiation/common/instantiation';
 import { IBadge } from 'vs/workbench/services/activity/common/activity';
 import { IDisposable } from 'vs/base/common/lifecycle';
 import { IProgressIndicator } from 'vs/platform/progress/common/progress';
@@ -20,7 +20,7 @@ export interface IPanelIdentifier {
 
 export interface IPanelService {
 
-	_serviceBrand: undefined;
+	_serviceBrand: ServiceIdentifier<any>;
 
 	readonly onDidPanelOpen: Event<{ panel: IPanel, focus: boolean }>;
 	readonly onDidPanelClose: Event<IPanel>;

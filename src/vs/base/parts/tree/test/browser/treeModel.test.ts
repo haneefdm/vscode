@@ -1081,10 +1081,10 @@ class DynamicModel implements _.IDataSource {
 	private data: any;
 	public promiseFactory: { (): Promise<any>; } | null;
 
-	private readonly _onGetChildren = new Emitter<any>();
+	private _onGetChildren = new Emitter<any>();
 	readonly onGetChildren: Event<any> = this._onGetChildren.event;
 
-	private readonly _onDidGetChildren = new Emitter<any>();
+	private _onDidGetChildren = new Emitter<any>();
 	readonly onDidGetChildren: Event<any> = this._onDidGetChildren.event;
 
 	constructor() {

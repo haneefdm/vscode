@@ -12,7 +12,6 @@ import { ICursorSelectionChangedEvent } from 'vs/editor/common/controller/cursor
 import { CharacterSet } from 'vs/editor/common/core/characterClassifier';
 import * as modes from 'vs/editor/common/modes';
 import { provideSignatureHelp } from 'vs/editor/contrib/parameterHints/provideSignatureHelp';
-import { EditorOption } from 'vs/editor/common/config/editorOptions';
 
 export interface TriggerContext {
 	readonly triggerKind: modes.SignatureHelpTriggerKind;
@@ -53,7 +52,7 @@ export class ParameterHintsModel extends Disposable {
 	public readonly onChangedHints = this._onChangedHints.event;
 
 	private readonly editor: ICodeEditor;
-	private triggerOnType = false;
+	private enabled: boolean;
 	private _state: ParameterHintState.State = ParameterHintState.Default;
 	private readonly _lastSignatureHelpResult = this._register(new MutableDisposable<modes.SignatureHelpResult>());
 	private triggerChars = new CharacterSet();
@@ -69,6 +68,7 @@ export class ParameterHintsModel extends Disposable {
 		super();
 
 		this.editor = editor;
+		this.enabled = false;
 
 		this.throttledDelayer = new Delayer(delay);
 
@@ -126,7 +126,7 @@ export class ParameterHintsModel extends Disposable {
 		const length = this.state.hints.signatures.length;
 		const activeSignature = this.state.hints.activeSignature;
 		const last = (activeSignature % length) === (length - 1);
-		const cycle = this.editor.getOption(EditorOption.parameterHints).cycle;
+		const cycle = this.editor.getConfiguration().contribInfo.parameterHints.cycle;
 
 		// If there is only one signature, or we're on last signature of list
 		if ((length < 2 || last) && !cycle) {
@@ -145,7 +145,7 @@ export class ParameterHintsModel extends Disposable {
 		const length = this.state.hints.signatures.length;
 		const activeSignature = this.state.hints.activeSignature;
 		const first = activeSignature === 0;
-		const cycle = this.editor.getOption(EditorOption.parameterHints).cycle;
+		const cycle = this.editor.getConfiguration().contribInfo.parameterHints.cycle;
 
 		// If there is only one signature, or we're on first signature of list
 		if ((length < 2 || first) && !cycle) {
@@ -242,7 +242,7 @@ export class ParameterHintsModel extends Disposable {
 	}
 
 	private onDidType(text: string) {
-		if (!this.triggerOnType) {
+		if (!this.enabled) {
 			return;
 		}
 
@@ -272,9 +272,9 @@ export class ParameterHintsModel extends Disposable {
 	}
 
 	private onEditorConfigurationChange(): void {
-		this.triggerOnType = this.editor.getOption(EditorOption.parameterHints).enabled;
+		this.enabled = this.editor.getConfiguration().contribInfo.parameterHints.enabled;
 
-		if (!this.triggerOnType) {
+		if (!this.enabled) {
 			this.cancel();
 		}
 	}

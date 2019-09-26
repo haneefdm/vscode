@@ -8,22 +8,21 @@ import * as path from 'vs/base/common/path';
 import * as pfs from 'vs/base/node/pfs';
 import { memoize } from 'vs/base/common/decorators';
 import { IConfigurationService } from 'vs/platform/configuration/common/configuration';
-import { ILifecycleMainService } from 'vs/platform/lifecycle/electron-main/lifecycleMainService';
-import product from 'vs/platform/product/common/product';
+import { ILifecycleService } from 'vs/platform/lifecycle/electron-main/lifecycleMain';
+import { IRequestService } from 'vs/platform/request/node/request';
+import product from 'vs/platform/product/node/product';
 import { State, IUpdate, StateType, AvailableForDownload, UpdateType } from 'vs/platform/update/common/update';
 import { ITelemetryService } from 'vs/platform/telemetry/common/telemetry';
 import { IEnvironmentService } from 'vs/platform/environment/common/environment';
 import { ILogService } from 'vs/platform/log/common/log';
-import { createUpdateURL, AbstractUpdateService, UpdateNotAvailableClassification } from 'vs/platform/update/electron-main/abstractUpdateService';
-import { IRequestService, asJson } from 'vs/platform/request/common/request';
+import { createUpdateURL, AbstractUpdateService } from 'vs/platform/update/electron-main/abstractUpdateService';
+import { download, asJson } from 'vs/base/node/request';
 import { checksum } from 'vs/base/node/crypto';
 import { tmpdir } from 'os';
 import { spawn } from 'child_process';
 import { shell } from 'electron';
 import { CancellationToken } from 'vs/base/common/cancellation';
 import { timeout } from 'vs/base/common/async';
-import { IFileService } from 'vs/platform/files/common/files';
-import { URI } from 'vs/base/common/uri';
 
 async function pollUntil(fn: () => boolean, millis = 1000): Promise<void> {
 	while (!fn()) {
@@ -49,7 +48,7 @@ function getUpdateType(): UpdateType {
 
 export class Win32UpdateService extends AbstractUpdateService {
 
-	_serviceBrand: undefined;
+	_serviceBrand: any;
 
 	private availableUpdate: IAvailableUpdate | undefined;
 
@@ -60,15 +59,14 @@ export class Win32UpdateService extends AbstractUpdateService {
 	}
 
 	constructor(
-		@ILifecycleMainService lifecycleMainService: ILifecycleMainService,
+		@ILifecycleService lifecycleService: ILifecycleService,
 		@IConfigurationService configurationService: IConfigurationService,
 		@ITelemetryService private readonly telemetryService: ITelemetryService,
 		@IEnvironmentService environmentService: IEnvironmentService,
 		@IRequestService requestService: IRequestService,
-		@ILogService logService: ILogService,
-		@IFileService private readonly fileService: IFileService
+		@ILogService logService: ILogService
 	) {
-		super(lifecycleMainService, configurationService, environmentService, requestService, logService);
+		super(lifecycleService, configurationService, environmentService, requestService, logService);
 
 		if (getUpdateType() === UpdateType.Setup) {
 			/* __GDPR__
@@ -114,7 +112,12 @@ export class Win32UpdateService extends AbstractUpdateService {
 				const updateType = getUpdateType();
 
 				if (!update || !update.url || !update.version || !update.productVersion) {
-					this.telemetryService.publicLog2<{ explicit: boolean }, UpdateNotAvailableClassification>('update:notAvailable', { explicit: !!context });
+					/* __GDPR__
+							"update:notAvailable" : {
+								"explicit" : { "classification": "SystemMetaData", "purpose": "FeatureInsight", "isMeasurement": true }
+							}
+						*/
+					this.telemetryService.publicLog('update:notAvailable', { explicit: !!context });
 
 					this.setState(State.Idle(updateType));
 					return Promise.resolve(null);
@@ -139,7 +142,7 @@ export class Win32UpdateService extends AbstractUpdateService {
 							const downloadPath = `${updatePackagePath}.tmp`;
 
 							return this.requestService.request({ url }, CancellationToken.None)
-								.then(context => this.fileService.writeFile(URI.file(downloadPath), context.stream))
+								.then(context => download(downloadPath, context))
 								.then(hash ? () => checksum(downloadPath, update.hash) : () => undefined)
 								.then(() => pfs.rename(downloadPath, updatePackagePath))
 								.then(() => updatePackagePath);
@@ -163,7 +166,12 @@ export class Win32UpdateService extends AbstractUpdateService {
 			})
 			.then(undefined, err => {
 				this.logService.error(err);
-				this.telemetryService.publicLog2<{ explicit: boolean }, UpdateNotAvailableClassification>('update:notAvailable', { explicit: !!context });
+				/* __GDPR__
+					"update:notAvailable" : {
+						"explicit" : { "classification": "SystemMetaData", "purpose": "FeatureInsight", "isMeasurement": true }
+					}
+					*/
+				this.telemetryService.publicLog('update:notAvailable', { explicit: !!context });
 
 				// only show message when explicitly checking for updates
 				const message: string | undefined = !!context ? (err.message || err) : undefined;

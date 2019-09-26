@@ -74,9 +74,9 @@ export class FilePreview implements IDisposable {
 		const beforeRange = new Range(startLineNumber, word.startColumn, startLineNumber, startColumn);
 		const afterRange = new Range(endLineNumber, endColumn, endLineNumber, Number.MAX_VALUE);
 
-		const before = model.getValueInRange(beforeRange).replace(/^\s+/, '');
+		const before = model.getValueInRange(beforeRange).replace(/^\s+/, strings.empty);
 		const inside = model.getValueInRange(range);
-		const after = model.getValueInRange(afterRange).replace(/\s+$/, '');
+		const after = model.getValueInRange(afterRange).replace(/\s+$/, strings.empty);
 
 		return {
 			value: before + inside + after,
@@ -89,7 +89,7 @@ export class FileReferences implements IDisposable {
 
 	private _children: OneReference[];
 	private _preview?: FilePreview;
-	private _resolved?: boolean;
+	private _resolved: boolean;
 	private _loadFailure: any;
 
 	constructor(private readonly _parent: ReferencesModel, private readonly _uri: URI) {

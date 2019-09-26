@@ -268,10 +268,10 @@ function factory(nodeRequire, path, fs, perf) {
 								const packData = JSON.parse(values[1]).contents;
 								const bundles = Object.keys(metadata.bundles);
 								const writes = [];
-								for (const bundle of bundles) {
+								for (let bundle of bundles) {
 									const modules = metadata.bundles[bundle];
 									const target = Object.create(null);
-									for (const module of modules) {
+									for (let module of modules) {
 										const keys = metadata.keys[module];
 										const defaultMessages = metadata.messages[module];
 										const translations = packData[module];

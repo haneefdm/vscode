@@ -3,7 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Application, ProblemSeverity, Problems } from '../../../../automation';
+import { Application } from '../../application';
+import { ProblemSeverity, Problems } from '../problems/problems';
 
 export function setup() {
 	describe('CSS', () => {

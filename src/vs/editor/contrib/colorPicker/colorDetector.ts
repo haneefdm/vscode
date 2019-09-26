@@ -19,7 +19,6 @@ import { ModelDecorationOptions } from 'vs/editor/common/model/textModel';
 import { ColorProviderRegistry } from 'vs/editor/common/modes';
 import { IColorData, getColors } from 'vs/editor/contrib/colorPicker/color';
 import { IConfigurationService } from 'vs/platform/configuration/common/configuration';
-import { EditorOption } from 'vs/editor/common/config/editorOptions';
 
 const MAX_DECORATORS = 500;
 
@@ -85,7 +84,7 @@ export class ColorDetector extends Disposable implements IEditorContribution {
 			}
 		}
 
-		return this._editor.getOption(EditorOption.colorDecorators);
+		return this._editor.getConfiguration().contribInfo.colorDecorators;
 	}
 
 	getId(): string {

@@ -12,7 +12,7 @@ import { IExtensionPointUser, ExtensionMessageCollector, ExtensionsRegistry } fr
 import { ContextKeyExpr } from 'vs/platform/contextkey/common/contextkey';
 import { MenuId, MenuRegistry, ILocalizedString, IMenuItem } from 'vs/platform/actions/common/actions';
 import { URI } from 'vs/base/common/uri';
-import { IDisposable, dispose, DisposableStore } from 'vs/base/common/lifecycle';
+import { IDisposable, dispose } from 'vs/base/common/lifecycle';
 
 namespace schema {
 
@@ -39,9 +39,8 @@ namespace schema {
 			case 'menuBar/file': return MenuId.MenubarFileMenu;
 			case 'scm/title': return MenuId.SCMTitle;
 			case 'scm/sourceControl': return MenuId.SCMSourceControl;
-			case 'scm/resourceState/context': return MenuId.SCMResourceContext;
-			case 'scm/resourceFolder/context': return MenuId.SCMResourceFolderContext;
 			case 'scm/resourceGroup/context': return MenuId.SCMResourceGroupContext;
+			case 'scm/resourceState/context': return MenuId.SCMResourceContext;
 			case 'scm/change/title': return MenuId.SCMChangeContext;
 			case 'statusBar/windowIndicator': return MenuId.StatusBarWindowIndicatorMenu;
 			case 'view/title': return MenuId.ViewTitle;
@@ -330,7 +329,7 @@ namespace schema {
 	};
 }
 
-const _commandRegistrations = new DisposableStore();
+let _commandRegistrations: IDisposable[] = [];
 
 export const commandsExtensionPoint = ExtensionsRegistry.registerExtensionPoint<schema.IUserFriendlyCommand | schema.IUserFriendlyCommand[]>({
 	extensionPoint: 'commands',
@@ -339,7 +338,7 @@ export const commandsExtensionPoint = ExtensionsRegistry.registerExtensionPoint<
 
 commandsExtensionPoint.setHandler(extensions => {
 
-	function handleCommand(userFriendlyCommand: schema.IUserFriendlyCommand, extension: IExtensionPointUser<any>) {
+	function handleCommand(userFriendlyCommand: schema.IUserFriendlyCommand, extension: IExtensionPointUser<any>, disposables: IDisposable[]) {
 
 		if (!schema.isValidCommand(userFriendlyCommand, extension.collector)) {
 			return;
@@ -369,20 +368,20 @@ commandsExtensionPoint.setHandler(extensions => {
 			precondition: ContextKeyExpr.deserialize(enablement),
 			iconLocation: absoluteIcon
 		});
-		_commandRegistrations.add(registration);
+		disposables.push(registration);
 	}
 
 	// remove all previous command registrations
-	_commandRegistrations.clear();
+	_commandRegistrations = dispose(_commandRegistrations);
 
-	for (const extension of extensions) {
+	for (let extension of extensions) {
 		const { value } = extension;
-		if (Array.isArray(value)) {
-			for (const command of value) {
-				handleCommand(command, extension);
+		if (Array.isArray<schema.IUserFriendlyCommand>(value)) {
+			for (let command of value) {
+				handleCommand(command, extension, _commandRegistrations);
 			}
 		} else {
-			handleCommand(value, extension);
+			handleCommand(value, extension, _commandRegistrations);
 		}
 	}
 });

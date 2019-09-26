@@ -169,31 +169,6 @@ export function getAllPropertyNames(obj: object): string[] {
 	return res;
 }
 
-export function getAllMethodNames(obj: object): string[] {
-	const methods: string[] = [];
-	for (const prop of getAllPropertyNames(obj)) {
-		if (typeof (obj as any)[prop] === 'function') {
-			methods.push(prop);
-		}
-	}
-	return methods;
-}
-
-export function createProxyObject<T extends object>(methodNames: string[], invoke: (method: string, args: any[]) => any): T {
-	const createProxyMethod = (method: string): () => any => {
-		return function () {
-			const args = Array.prototype.slice.call(arguments, 0);
-			return invoke(method, args);
-		};
-	};
-
-	let result = {} as T;
-	for (const methodName of methodNames) {
-		(<any>result)[methodName] = createProxyMethod(methodName);
-	}
-	return result;
-}
-
 /**
  * Converts null to undefined, passes all other values through.
  */
@@ -207,18 +182,3 @@ export function withNullAsUndefined<T>(x: T | null): T | undefined {
 export function withUndefinedAsNull<T>(x: T | undefined): T | null {
 	return typeof x === 'undefined' ? null : x;
 }
-
-/**
- * Allows to add a first parameter to functions of a type.
- */
-export type AddFirstParameterToFunctions<Target, TargetFunctionsReturnType, FirstParameter> = {
-
-	//  For every property
-	[K in keyof Target]:
-
-	// Function: add param to function
-	Target[K] extends (...args: any) => TargetFunctionsReturnType ? (firstArg: FirstParameter, ...args: Parameters<Target[K]>) => ReturnType<Target[K]> :
-
-	// Else: just leave as is
-	Target[K]
-};

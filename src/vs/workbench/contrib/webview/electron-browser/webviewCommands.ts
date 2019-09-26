@@ -8,9 +8,7 @@ import * as nls from 'vs/nls';
 import { Command, ServicesAccessor } from 'vs/editor/browser/editorExtensions';
 import { WebviewEditor } from 'vs/workbench/contrib/webview/browser/webviewEditor';
 import { IEditorService } from 'vs/workbench/services/editor/common/editorService';
-import { ElectronWebviewBasedWebview } from 'vs/workbench/contrib/webview/electron-browser/webviewElement';
-import { WebviewEditorOverlay } from 'vs/workbench/contrib/webview/browser/webview';
-import { WebviewTag } from 'electron';
+import { WebviewElement } from 'vs/workbench/contrib/webview/electron-browser/webviewElement';
 
 export class OpenWebviewDeveloperToolsAction extends Action {
 	static readonly ID = 'workbench.action.webview.openDeveloperTools';
@@ -25,7 +23,7 @@ export class OpenWebviewDeveloperToolsAction extends Action {
 		const elements = document.querySelectorAll('webview.ready');
 		for (let i = 0; i < elements.length; i++) {
 			try {
-				(elements.item(i) as WebviewTag).openDevTools();
+				(elements.item(i) as Electron.WebviewTag).openDevTools();
 			} catch (e) {
 				console.error(e);
 			}
@@ -88,17 +86,12 @@ function getActiveWebviewEditor(accessor: ServicesAccessor): WebviewEditor | und
 	return activeControl.isWebviewEditor ? activeControl : undefined;
 }
 
-function withActiveWebviewBasedWebview(accessor: ServicesAccessor, f: (webview: ElectronWebviewBasedWebview) => void): void {
+function withActiveWebviewBasedWebview(accessor: ServicesAccessor, f: (webview: WebviewElement) => void): void {
 	const webViewEditor = getActiveWebviewEditor(accessor);
 	if (webViewEditor) {
 		webViewEditor.withWebview(webview => {
-			if (webview instanceof ElectronWebviewBasedWebview) {
+			if (webview instanceof WebviewElement) {
 				f(webview);
-			} else if ((webview as WebviewEditorOverlay).getInnerWebview) {
-				const innerWebview = (webview as WebviewEditorOverlay).getInnerWebview();
-				if (innerWebview instanceof ElectronWebviewBasedWebview) {
-					f(innerWebview);
-				}
 			}
 		});
 	}

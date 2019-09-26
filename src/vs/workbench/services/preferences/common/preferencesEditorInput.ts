@@ -21,7 +21,7 @@ export class PreferencesEditorInput extends SideBySideEditorInput {
 		return PreferencesEditorInput.ID;
 	}
 
-	getTitle(verbosity: Verbosity): string | undefined {
+	getTitle(verbosity: Verbosity): string | null {
 		return this.master.getTitle(verbosity);
 	}
 }
@@ -60,7 +60,7 @@ export class KeybindingsEditorInput extends EditorInput {
 	static readonly ID: string = 'workbench.input.keybindings';
 	readonly keybindingsModel: KeybindingsEditorModel;
 
-	searchOptions: IKeybindingsEditorSearchOptions | null = null;
+	searchOptions: IKeybindingsEditorSearchOptions | null;
 
 	constructor(@IInstantiationService instantiationService: IInstantiationService) {
 		super();

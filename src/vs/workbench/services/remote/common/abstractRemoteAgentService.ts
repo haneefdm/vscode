@@ -8,7 +8,7 @@ import { Disposable } from 'vs/base/common/lifecycle';
 import { IChannel, IServerChannel, getDelayedChannel } from 'vs/base/parts/ipc/common/ipc';
 import { Client } from 'vs/base/parts/ipc/common/ipc.net';
 import { IEnvironmentService } from 'vs/platform/environment/common/environment';
-import { connectRemoteAgentManagement, IConnectionOptions, ISocketFactory, PersistenConnectionEvent } from 'vs/platform/remote/common/remoteAgentConnection';
+import { connectRemoteAgentManagement, IConnectionOptions, IWebSocketFactory, PersistenConnectionEvent } from 'vs/platform/remote/common/remoteAgentConnection';
 import { IRemoteAgentConnection, IRemoteAgentService } from 'vs/workbench/services/remote/common/remoteAgentService';
 import { IRemoteAuthorityResolverService, RemoteAuthorityResolverError } from 'vs/platform/remote/common/remoteAuthorityResolver';
 import { LifecyclePhase } from 'vs/platform/lifecycle/common/lifecycle';
@@ -17,14 +17,13 @@ import { IWorkbenchContribution, IWorkbenchContributionsRegistry, Extensions } f
 import { Registry } from 'vs/platform/registry/common/platform';
 import { RemoteExtensionEnvironmentChannelClient } from 'vs/workbench/services/remote/common/remoteAgentEnvironmentChannel';
 import { INotificationService } from 'vs/platform/notification/common/notification';
-import { IDiagnosticInfoOptions, IDiagnosticInfo } from 'vs/platform/diagnostics/common/diagnostics';
+import { IDiagnosticInfoOptions, IDiagnosticInfo } from 'vs/platform/diagnostics/common/diagnosticsService';
 import { Emitter } from 'vs/base/common/event';
 import { ISignService } from 'vs/platform/sign/common/sign';
-import { ILogService } from 'vs/platform/log/common/log';
 
-export abstract class AbstractRemoteAgentService extends Disposable {
+export abstract class AbstractRemoteAgentService extends Disposable implements IRemoteAgentService {
 
-	_serviceBrand: undefined;
+	_serviceBrand: any;
 
 	private _environment: Promise<IRemoteAgentEnvironment | null> | null;
 
@@ -32,7 +31,6 @@ export abstract class AbstractRemoteAgentService extends Disposable {
 		@IEnvironmentService protected readonly _environmentService: IEnvironmentService
 	) {
 		super();
-		this._environment = null;
 	}
 
 	abstract getConnection(): IRemoteAgentConnection | null;
@@ -85,10 +83,10 @@ export class RemoteAgentConnection extends Disposable implements IRemoteAgentCon
 	constructor(
 		remoteAuthority: string,
 		private readonly _commit: string | undefined,
-		private readonly _socketFactory: ISocketFactory,
+		private readonly _webSocketFactory: IWebSocketFactory,
+		private readonly _environmentService: IEnvironmentService,
 		private readonly _remoteAuthorityResolverService: IRemoteAuthorityResolverService,
-		private readonly _signService: ISignService,
-		private readonly _logService: ILogService
+		private readonly _signService: ISignService
 	) {
 		super();
 		this.remoteAuthority = remoteAuthority;
@@ -113,8 +111,9 @@ export class RemoteAgentConnection extends Disposable implements IRemoteAgentCon
 	private async _createConnection(): Promise<Client<RemoteAgentConnectionContext>> {
 		let firstCall = true;
 		const options: IConnectionOptions = {
+			isBuilt: this._environmentService.isBuilt,
 			commit: this._commit,
-			socketFactory: this._socketFactory,
+			webSocketFactory: this._webSocketFactory,
 			addressProvider: {
 				getAddress: async () => {
 					if (firstCall) {
@@ -122,12 +121,11 @@ export class RemoteAgentConnection extends Disposable implements IRemoteAgentCon
 					} else {
 						this._onReconnecting.fire(undefined);
 					}
-					const { authority } = await this._remoteAuthorityResolverService.resolveAuthority(this.remoteAuthority);
-					return { host: authority.host, port: authority.port };
+					const { host, port } = await this._remoteAuthorityResolverService.resolveAuthority(this.remoteAuthority);
+					return { host, port };
 				}
 			},
-			signService: this._signService,
-			logService: this._logService
+			signService: this._signService
 		};
 		const connection = this._register(await connectRemoteAgentManagement(options, this.remoteAuthority, `renderer`));
 		this._register(connection.onDidStateChange(e => this._onDidStateChange.fire(e)));

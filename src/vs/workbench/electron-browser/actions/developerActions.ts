@@ -4,21 +4,20 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Action } from 'vs/base/common/actions';
+import { IWindowService, IWindowsService } from 'vs/platform/windows/common/windows';
 import * as nls from 'vs/nls';
-import { IElectronService } from 'vs/platform/electron/node/electron';
-import { ISharedProcessService } from 'vs/platform/ipc/electron-browser/sharedProcessService';
 
 export class ToggleDevToolsAction extends Action {
 
 	static readonly ID = 'workbench.action.toggleDevTools';
 	static LABEL = nls.localize('toggleDevTools', "Toggle Developer Tools");
 
-	constructor(id: string, label: string, @IElectronService private readonly electronService: IElectronService) {
+	constructor(id: string, label: string, @IWindowService private readonly windowsService: IWindowService) {
 		super(id, label);
 	}
 
 	run(): Promise<void> {
-		return this.electronService.toggleDevTools();
+		return this.windowsService.toggleDevTools();
 	}
 }
 
@@ -27,11 +26,11 @@ export class ToggleSharedProcessAction extends Action {
 	static readonly ID = 'workbench.action.toggleSharedProcess';
 	static LABEL = nls.localize('toggleSharedProcess', "Toggle Shared Process");
 
-	constructor(id: string, label: string, @ISharedProcessService private readonly sharedProcessService: ISharedProcessService) {
+	constructor(id: string, label: string, @IWindowsService private readonly windowsService: IWindowsService) {
 		super(id, label);
 	}
 
 	run(): Promise<void> {
-		return this.sharedProcessService.toggleSharedProcessWindow();
+		return this.windowsService.toggleSharedProcess();
 	}
 }

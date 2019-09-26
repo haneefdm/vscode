@@ -251,18 +251,15 @@ suite('Webview tests', () => {
 				});
 			</script>`);
 
-		async function asWebviewUri(path: string) {
-			const root = await webview.webview.asWebviewUri(vscode.Uri.file(vscode.workspace.rootPath!));
-			return root.toString() + path;
-		}
+		const workspaceRootUri = webview.webview.resourceRoot + vscode.Uri.file(vscode.workspace.rootPath!).path;
 
 		{
-			const imagePath = await asWebviewUri('/image.png');
+			const imagePath = workspaceRootUri.toString() + '/image.png';
 			const response = sendRecieveMessage(webview, { src: imagePath });
 			assert.strictEqual((await response).value, true);
 		}
 		{
-			const imagePath = await asWebviewUri('/no-such-image.png');
+			const imagePath = workspaceRootUri.toString() + '/no-such-image.png';
 			const response = sendRecieveMessage(webview, { src: imagePath });
 			assert.strictEqual((await response).value, false);
 		}

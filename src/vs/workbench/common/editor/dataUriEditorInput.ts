@@ -8,6 +8,7 @@ import { URI } from 'vs/base/common/uri';
 import { IInstantiationService } from 'vs/platform/instantiation/common/instantiation';
 import { BinaryEditorModel } from 'vs/workbench/common/editor/binaryEditorModel';
 import { DataUri } from 'vs/base/common/resources';
+import { withUndefinedAsNull } from 'vs/base/common/types';
 
 /**
  * An editor input to present data URIs in a binary editor. Data URIs have the form of:
@@ -24,6 +25,10 @@ export class DataUriEditorInput extends EditorInput {
 		@IInstantiationService private readonly instantiationService: IInstantiationService
 	) {
 		super();
+
+		this.name = name;
+		this.description = description;
+		this.resource = resource;
 
 		if (!this.name || !this.description) {
 			const metadata = DataUri.parseMetaData(this.resource);
@@ -46,12 +51,12 @@ export class DataUriEditorInput extends EditorInput {
 		return DataUriEditorInput.ID;
 	}
 
-	getName(): string | undefined {
-		return this.name;
+	getName(): string | null {
+		return withUndefinedAsNull(this.name);
 	}
 
-	getDescription(): string | undefined {
-		return this.description;
+	getDescription(): string | null {
+		return withUndefinedAsNull(this.description);
 	}
 
 	resolve(): Promise<BinaryEditorModel> {

@@ -76,7 +76,7 @@ export interface IThemingParticipant {
 }
 
 export interface IThemeService {
-	_serviceBrand: undefined;
+	_serviceBrand: any;
 
 	getTheme(): ITheme;
 

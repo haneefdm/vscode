@@ -33,7 +33,7 @@ export class ToolBar extends Disposable {
 	private actionBar: ActionBar;
 	private toggleMenuAction: ToggleMenuAction;
 	private toggleMenuActionViewItem = this._register(new MutableDisposable<DropdownMenuActionViewItem>());
-	private hasSecondaryActions: boolean = false;
+	private hasSecondaryActions: boolean;
 	private lookupKeybindings: boolean;
 
 	constructor(container: HTMLElement, contextMenuProvider: IContextMenuProvider, options: IToolBarOptions = { orientation: ActionsOrientation.HORIZONTAL }) {
@@ -65,7 +65,7 @@ export class ToolBar extends Disposable {
 						this.options.actionViewItemProvider,
 						this.actionRunner,
 						this.options.getKeyBinding,
-						'codicon-more',
+						'toolbar-toggle-more',
 						this.options.anchorAlignmentProvider
 					);
 					this.toggleMenuActionViewItem.value.setActionContext(this.actionBar.context);
@@ -162,7 +162,6 @@ class ToggleMenuAction extends Action {
 		title = title || nls.localize('moreActions', "More Actions...");
 		super(ToggleMenuAction.ID, title, undefined, true);
 
-		this._menuActions = [];
 		this.toggleDropdownMenu = toggleDropdownMenu;
 	}
 

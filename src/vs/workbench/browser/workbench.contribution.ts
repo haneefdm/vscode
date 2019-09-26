@@ -6,7 +6,7 @@
 import { Registry } from 'vs/platform/registry/common/platform';
 import * as nls from 'vs/nls';
 import { IConfigurationRegistry, Extensions as ConfigurationExtensions, ConfigurationScope } from 'vs/platform/configuration/common/configurationRegistry';
-import { isMacintosh, isWindows, isLinux, isWeb, isNative } from 'vs/base/common/platform';
+import { isMacintosh, isWindows, isLinux, isWeb } from 'vs/base/common/platform';
 
 // Configuration
 (function registerConfiguration(): void {
@@ -106,6 +106,12 @@ import { isMacintosh, isWindows, isLinux, isWeb, isNative } from 'vs/base/common
 				'type': 'boolean',
 				'description': nls.localize('revealIfOpen', "Controls whether an editor is revealed in any of the visible groups if opened. If disabled, an editor will prefer to open in the currently active editor group. If enabled, an already opened editor will be revealed instead of opened again in the currently active editor group. Note that there are some cases where this setting is ignored, e.g. when forcing an editor to open in a specific group or to the side of the currently active group."),
 				'default': false
+			},
+			'workbench.editor.swipeToNavigate': {
+				'type': 'boolean',
+				'description': nls.localize('swipeToNavigate', "Navigate between open files using three-finger swipe horizontally."),
+				'default': false,
+				'included': isMacintosh && !isWeb
 			},
 			'workbench.editor.mouseBackForwardToNavigate': {
 				'type': 'boolean',
@@ -234,10 +240,11 @@ import { isMacintosh, isWindows, isLinux, isWeb, isNative } from 'vs/base/common
 				'default': true,
 				'tags': ['usesOnlineServices']
 			},
-			'workbench.octiconsUpdate.enabled': {
+			'workbench.useExperimentalGridLayout': {
 				'type': 'boolean',
-				'default': true,
-				'description': nls.localize('workbench.octiconsUpdate.enabled', "Controls the visibility of the new Octicons style in the workbench.")
+				'description': nls.localize('workbench.useExperimentalGridLayout', "Enables the grid layout for the workbench. This setting may enable additional layout options for workbench components."),
+				'default': false,
+				'scope': ConfigurationScope.APPLICATION
 			}
 		}
 	});
@@ -245,7 +252,7 @@ import { isMacintosh, isWindows, isLinux, isWeb, isNative } from 'vs/base/common
 	// Window
 
 	let windowTitleDescription = nls.localize('windowTitle', "Controls the window title based on the active editor. Variables are substituted based on the context:");
-	windowTitleDescription += '\n- ' + [
+	windowTitleDescription += [
 		nls.localize('activeEditorShort', "`\${activeEditorShort}`: the file name (e.g. myFile.txt)."),
 		nls.localize('activeEditorMedium', "`\${activeEditorMedium}`: the path of the file relative to the workspace folder (e.g. myFolder/myFileFolder/myFile.txt)."),
 		nls.localize('activeEditorLong', "`\${activeEditorLong}`: the full path of the file (e.g. /Users/Development/myFolder/myFileFolder/myFile.txt)."),
@@ -257,7 +264,6 @@ import { isMacintosh, isWindows, isLinux, isWeb, isNative } from 'vs/base/common
 		nls.localize('rootName', "`\${rootName}`: name of the workspace (e.g. myFolder or myWorkspace)."),
 		nls.localize('rootPath', "`\${rootPath}`: file path of the workspace (e.g. /Users/Development/myWorkspace)."),
 		nls.localize('appName', "`\${appName}`: e.g. VS Code."),
-		nls.localize('remoteName', "`\${remoteName}`: e.g. SSH"),
 		nls.localize('dirty', "`\${dirty}`: a dirty indicator if the active editor is dirty."),
 		nls.localize('separator', "`\${separator}`: a conditional separator (\" - \") that only shows when surrounded by variables with values or static text.")
 	].join('\n- '); // intentionally concatenated to not produce a string that is too long for translations
@@ -270,45 +276,33 @@ import { isMacintosh, isWindows, isLinux, isWeb, isNative } from 'vs/base/common
 		'properties': {
 			'window.title': {
 				'type': 'string',
-				'default': (() => {
-					if (isMacintosh && isNative) {
-						return '${activeEditorShort}${separator}${rootName}'; // macOS has native dirty indicator
-					}
-
-					const base = '${dirty}${activeEditorShort}${separator}${rootName}${separator}${appName}';
-					if (isWeb) {
-						return base + '${separator}${remoteName}'; // Web: always show remote indicator
-					}
-
-					return base;
-				})(),
+				'default': isMacintosh ? '${activeEditorShort}${separator}${rootName}' : '${dirty}${activeEditorShort}${separator}${rootName}${separator}${appName}',
 				'markdownDescription': windowTitleDescription
 			},
 			'window.menuBarVisibility': {
 				'type': 'string',
-				'enum': ['default', 'visible', 'toggle', 'hidden', 'compact'],
+				'enum': ['default', 'visible', 'toggle', 'hidden'],
 				'enumDescriptions': [
 					nls.localize('window.menuBarVisibility.default', "Menu is only hidden in full screen mode."),
 					nls.localize('window.menuBarVisibility.visible', "Menu is always visible even in full screen mode."),
 					nls.localize('window.menuBarVisibility.toggle', "Menu is hidden but can be displayed via Alt key."),
-					nls.localize('window.menuBarVisibility.hidden', "Menu is always hidden."),
-					nls.localize('window.menuBarVisibility.compact', "Menu is displayed as a compact button in the sidebar.")
+					nls.localize('window.menuBarVisibility.hidden', "Menu is always hidden.")
 				],
-				'default': isWeb ? 'compact' : 'default',
+				'default': 'default',
 				'scope': ConfigurationScope.APPLICATION,
 				'description': nls.localize('menuBarVisibility', "Control the visibility of the menu bar. A setting of 'toggle' means that the menu bar is hidden and a single press of the Alt key will show it. By default, the menu bar will be visible, unless the window is full screen."),
 				'included': isWindows || isLinux || isWeb
 			},
 			'window.enableMenuBarMnemonics': {
 				'type': 'boolean',
-				'default': !isMacintosh,
+				'default': true,
 				'scope': ConfigurationScope.APPLICATION,
 				'description': nls.localize('enableMenuBarMnemonics', "Controls whether the main menus can be opened via Alt-key shortcuts. Disabling mnemonics allows to bind these Alt-key shortcuts to editor commands instead."),
-				'included': isWindows || isLinux || isWeb
+				'included': isWindows || isLinux
 			},
 			'window.customMenuBarAltFocus': {
 				'type': 'boolean',
-				'default': !isMacintosh,
+				'default': true,
 				'scope': ConfigurationScope.APPLICATION,
 				'markdownDescription': nls.localize('customMenuBarAltFocus', "Controls whether the menu bar will be focused by pressing the Alt-key. This setting has no effect on toggling the menu bar with the Alt-key."),
 				'included': isWindows || isLinux || isWeb

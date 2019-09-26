@@ -294,7 +294,7 @@ export namespace CoreNavigationCommands {
 					CursorMoveCommands.moveTo(cursors.context, cursors.getPrimaryCursor(), this._inSelectionMode, args.position, args.viewPosition)
 				]
 			);
-			cursors.reveal(args.source, true, RevealTarget.Primary, ScrollType.Smooth);
+			cursors.reveal(true, RevealTarget.Primary, ScrollType.Smooth);
 		}
 	}
 
@@ -316,13 +316,10 @@ export namespace CoreNavigationCommands {
 			const result = this._getColumnSelectResult(cursors.context, cursors.getPrimaryCursor(), cursors.getColumnSelectData(), args);
 			cursors.setStates(args.source, CursorChangeReason.Explicit, result.viewStates.map((viewState) => CursorState.fromViewState(viewState)));
 			cursors.setColumnSelectData({
-				isReal: true,
-				fromViewLineNumber: result.fromLineNumber,
-				fromViewVisualColumn: result.fromVisualColumn,
 				toViewLineNumber: result.toLineNumber,
 				toViewVisualColumn: result.toVisualColumn
 			});
-			cursors.reveal(args.source, true, (result.reversed ? RevealTarget.TopMost : RevealTarget.BottomMost), ScrollType.Smooth);
+			cursors.reveal(true, (result.reversed ? RevealTarget.TopMost : RevealTarget.BottomMost), ScrollType.Smooth);
 		}
 
 		protected abstract _getColumnSelectResult(context: CursorContext, primary: CursorState, prevColumnSelectData: IColumnSelectData, args: any): IColumnSelectResult;
@@ -341,11 +338,15 @@ export namespace CoreNavigationCommands {
 
 			// validate `args`
 			const validatedPosition = context.model.validatePosition(args.position);
-			const validatedViewPosition = context.validateViewPosition(new Position(args.viewPosition.lineNumber, args.viewPosition.column), validatedPosition);
 
-			let fromViewLineNumber = args.doColumnSelect ? prevColumnSelectData.fromViewLineNumber : validatedViewPosition.lineNumber;
-			let fromViewVisualColumn = args.doColumnSelect ? prevColumnSelectData.fromViewVisualColumn : args.mouseColumn - 1;
-			return ColumnSelection.columnSelect(context.config, context.viewModel, fromViewLineNumber, fromViewVisualColumn, validatedViewPosition.lineNumber, args.mouseColumn - 1);
+			let validatedViewPosition: Position;
+			if (args.viewPosition) {
+				validatedViewPosition = context.validateViewPosition(new Position(args.viewPosition.lineNumber, args.viewPosition.column), validatedPosition);
+			} else {
+				validatedViewPosition = context.convertModelPositionToViewPosition(validatedPosition);
+			}
+
+			return ColumnSelection.columnSelect(context.config, context.viewModel, primary.viewState.selection, validatedViewPosition.lineNumber, args.mouseColumn - 1);
 		}
 	});
 
@@ -364,7 +365,7 @@ export namespace CoreNavigationCommands {
 		}
 
 		protected _getColumnSelectResult(context: CursorContext, primary: CursorState, prevColumnSelectData: IColumnSelectData, args: any): IColumnSelectResult {
-			return ColumnSelection.columnSelectLeft(context.config, context.viewModel, prevColumnSelectData);
+			return ColumnSelection.columnSelectLeft(context.config, context.viewModel, primary.viewState, prevColumnSelectData.toViewLineNumber, prevColumnSelectData.toViewVisualColumn);
 		}
 	});
 
@@ -383,7 +384,7 @@ export namespace CoreNavigationCommands {
 		}
 
 		protected _getColumnSelectResult(context: CursorContext, primary: CursorState, prevColumnSelectData: IColumnSelectData, args: any): IColumnSelectResult {
-			return ColumnSelection.columnSelectRight(context.config, context.viewModel, prevColumnSelectData);
+			return ColumnSelection.columnSelectRight(context.config, context.viewModel, primary.viewState, prevColumnSelectData.toViewLineNumber, prevColumnSelectData.toViewVisualColumn);
 		}
 	});
 
@@ -397,7 +398,7 @@ export namespace CoreNavigationCommands {
 		}
 
 		protected _getColumnSelectResult(context: CursorContext, primary: CursorState, prevColumnSelectData: IColumnSelectData, args: any): IColumnSelectResult {
-			return ColumnSelection.columnSelectUp(context.config, context.viewModel, prevColumnSelectData, this._isPaged);
+			return ColumnSelection.columnSelectUp(context.config, context.viewModel, primary.viewState, this._isPaged, prevColumnSelectData.toViewLineNumber, prevColumnSelectData.toViewVisualColumn);
 		}
 	}
 
@@ -435,7 +436,7 @@ export namespace CoreNavigationCommands {
 		}
 
 		protected _getColumnSelectResult(context: CursorContext, primary: CursorState, prevColumnSelectData: IColumnSelectData, args: any): IColumnSelectResult {
-			return ColumnSelection.columnSelectDown(context.config, context.viewModel, prevColumnSelectData, this._isPaged);
+			return ColumnSelection.columnSelectDown(context.config, context.viewModel, primary.viewState, this._isPaged, prevColumnSelectData.toViewLineNumber, prevColumnSelectData.toViewVisualColumn);
 		}
 	}
 
@@ -488,7 +489,7 @@ export namespace CoreNavigationCommands {
 				CursorChangeReason.Explicit,
 				CursorMoveCommands.move(cursors.context, cursors.getAll(), args)
 			);
-			cursors.reveal(source, true, RevealTarget.Primary, ScrollType.Smooth);
+			cursors.reveal(true, RevealTarget.Primary, ScrollType.Smooth);
 		}
 	}
 
@@ -827,7 +828,7 @@ export namespace CoreNavigationCommands {
 				CursorChangeReason.Explicit,
 				CursorMoveCommands.moveToBeginningOfLine(cursors.context, cursors.getAll(), this._inSelectionMode)
 			);
-			cursors.reveal(args.source, true, RevealTarget.Primary, ScrollType.Smooth);
+			cursors.reveal(true, RevealTarget.Primary, ScrollType.Smooth);
 		}
 	}
 
@@ -876,7 +877,7 @@ export namespace CoreNavigationCommands {
 				CursorChangeReason.Explicit,
 				this._exec(cursors.context, cursors.getAll())
 			);
-			cursors.reveal(args.source, true, RevealTarget.Primary, ScrollType.Smooth);
+			cursors.reveal(true, RevealTarget.Primary, ScrollType.Smooth);
 		}
 
 		private _exec(context: CursorContext, cursors: CursorState[]): PartialCursorState[] {
@@ -906,7 +907,7 @@ export namespace CoreNavigationCommands {
 				CursorChangeReason.Explicit,
 				CursorMoveCommands.moveToEndOfLine(cursors.context, cursors.getAll(), this._inSelectionMode)
 			);
-			cursors.reveal(args.source, true, RevealTarget.Primary, ScrollType.Smooth);
+			cursors.reveal(true, RevealTarget.Primary, ScrollType.Smooth);
 		}
 	}
 
@@ -955,7 +956,7 @@ export namespace CoreNavigationCommands {
 				CursorChangeReason.Explicit,
 				this._exec(cursors.context, cursors.getAll())
 			);
-			cursors.reveal(args.source, true, RevealTarget.Primary, ScrollType.Smooth);
+			cursors.reveal(true, RevealTarget.Primary, ScrollType.Smooth);
 		}
 
 		private _exec(context: CursorContext, cursors: CursorState[]): PartialCursorState[] {
@@ -986,7 +987,7 @@ export namespace CoreNavigationCommands {
 				CursorChangeReason.Explicit,
 				CursorMoveCommands.moveToBeginningOfBuffer(cursors.context, cursors.getAll(), this._inSelectionMode)
 			);
-			cursors.reveal(args.source, true, RevealTarget.Primary, ScrollType.Smooth);
+			cursors.reveal(true, RevealTarget.Primary, ScrollType.Smooth);
 		}
 	}
 
@@ -1030,7 +1031,7 @@ export namespace CoreNavigationCommands {
 				CursorChangeReason.Explicit,
 				CursorMoveCommands.moveToEndOfBuffer(cursors.context, cursors.getAll(), this._inSelectionMode)
 			);
-			cursors.reveal(args.source, true, RevealTarget.Primary, ScrollType.Smooth);
+			cursors.reveal(true, RevealTarget.Primary, ScrollType.Smooth);
 		}
 	}
 
@@ -1249,7 +1250,7 @@ export namespace CoreNavigationCommands {
 					CursorMoveCommands.word(cursors.context, cursors.getPrimaryCursor(), this._inSelectionMode, args.position)
 				]
 			);
-			cursors.reveal(args.source, true, RevealTarget.Primary, ScrollType.Smooth);
+			cursors.reveal(true, RevealTarget.Primary, ScrollType.Smooth);
 		}
 	}
 
@@ -1309,7 +1310,7 @@ export namespace CoreNavigationCommands {
 					CursorMoveCommands.line(cursors.context, cursors.getPrimaryCursor(), this._inSelectionMode, args.position, args.viewPosition)
 				]
 			);
-			cursors.reveal(args.source, false, RevealTarget.Primary, ScrollType.Smooth);
+			cursors.reveal(false, RevealTarget.Primary, ScrollType.Smooth);
 		}
 	}
 
@@ -1381,7 +1382,7 @@ export namespace CoreNavigationCommands {
 				CursorChangeReason.Explicit,
 				CursorMoveCommands.expandLineSelection(cursors.context, cursors.getAll())
 			);
-			cursors.reveal(args.source, true, RevealTarget.Primary, ScrollType.Smooth);
+			cursors.reveal(true, RevealTarget.Primary, ScrollType.Smooth);
 		}
 
 	});
@@ -1409,7 +1410,7 @@ export namespace CoreNavigationCommands {
 					CursorMoveCommands.cancelSelection(cursors.context, cursors.getPrimaryCursor())
 				]
 			);
-			cursors.reveal(args.source, true, RevealTarget.Primary, ScrollType.Smooth);
+			cursors.reveal(true, RevealTarget.Primary, ScrollType.Smooth);
 		}
 	});
 
@@ -1436,7 +1437,7 @@ export namespace CoreNavigationCommands {
 					cursors.getPrimaryCursor()
 				]
 			);
-			cursors.reveal(args.source, true, RevealTarget.Primary, ScrollType.Smooth);
+			cursors.reveal(true, RevealTarget.Primary, ScrollType.Smooth);
 		}
 	});
 
@@ -1484,7 +1485,7 @@ export namespace CoreNavigationCommands {
 
 			const viewRange = cursors.context.convertModelRangeToViewRange(range);
 
-			cursors.revealRange(args.source, false, viewRange, revealAt, ScrollType.Smooth);
+			cursors.revealRange(false, viewRange, revealAt, ScrollType.Smooth);
 		}
 	});
 

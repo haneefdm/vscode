@@ -156,7 +156,7 @@ export class UnknownExtensionRenderer implements IListRenderer<ITreeNode<IExtens
 
 class OpenExtensionAction extends Action {
 
-	private _extensionData: IExtensionData | undefined;
+	private _extensionData: IExtensionData;
 
 	constructor(@IExtensionsWorkbenchService private readonly extensionsWorkdbenchService: IExtensionsWorkbenchService) {
 		super('extensions.action.openExtension', '');
@@ -166,11 +166,12 @@ class OpenExtensionAction extends Action {
 		this._extensionData = extension;
 	}
 
+	public get extensionData(): IExtensionData {
+		return this._extensionData;
+	}
+
 	run(sideByside: boolean): Promise<any> {
-		if (this._extensionData) {
-			return this.extensionsWorkdbenchService.open(this._extensionData.extension, sideByside);
-		}
-		return Promise.resolve();
+		return this.extensionsWorkdbenchService.open(this.extensionData.extension, sideByside);
 	}
 }
 
@@ -198,7 +199,6 @@ export class ExtensionsTree extends WorkbenchAsyncDataTree<IExtensionData, IExte
 		};
 
 		super(
-			'ExtensionsTree',
 			container,
 			delegate,
 			renderers,
@@ -255,10 +255,8 @@ export class ExtensionData implements IExtensionData {
 					toQuery.push(id);
 				}
 			}
-			if (toQuery.length) {
-				const galleryResult = await this.extensionsWorkbenchService.queryGallery({ names: toQuery, pageSize: toQuery.length }, CancellationToken.None);
-				result.push(...galleryResult.firstPage);
-			}
+			const galleryResult = await this.extensionsWorkbenchService.queryGallery({ names: toQuery, pageSize: toQuery.length }, CancellationToken.None);
+			result.push(...galleryResult.firstPage);
 			return result.map(extension => new ExtensionData(extension, this, this.getChildrenExtensionIds, this.extensionsWorkbenchService));
 		}
 		return null;

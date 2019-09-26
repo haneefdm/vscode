@@ -32,6 +32,9 @@ export class LanguageFeatureRegistry<T> {
 	private readonly _entries: Entry<T>[] = [];
 	private readonly _onDidChange = new Emitter<number>();
 
+	constructor() {
+	}
+
 	get onDidChange(): Event<number> {
 		return this._onDidChange.event;
 	}

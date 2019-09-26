@@ -7,13 +7,13 @@ import { localize } from 'vs/nls';
 import { IDisposable, dispose } from 'vs/base/common/lifecycle';
 import { IWindowsMainService } from 'vs/platform/windows/electron-main/windows';
 import { Event } from 'vs/base/common/event';
-import { BrowserWindow, app, AuthInfo, WebContents, Event as ElectronEvent } from 'electron';
+import { BrowserWindow, app } from 'electron';
 
 type LoginEvent = {
-	event: ElectronEvent;
-	webContents: WebContents;
-	req: Request;
-	authInfo: AuthInfo;
+	event: Electron.Event;
+	webContents: Electron.WebContents;
+	req: Electron.Request;
+	authInfo: Electron.AuthInfo;
 	cb: (username: string, password: string) => void;
 };
 
@@ -24,7 +24,7 @@ type Credentials = {
 
 export class ProxyAuthHandler {
 
-	_serviceBrand: undefined;
+	_serviceBrand: any;
 
 	private retryCount = 0;
 	private disposables: IDisposable[] = [];
@@ -54,11 +54,7 @@ export class ProxyAuthHandler {
 			width: 450,
 			height: 220,
 			show: true,
-			title: 'VS Code',
-			webPreferences: {
-				nodeIntegration: true,
-				webviewTag: true
-			}
+			title: 'VS Code'
 		};
 
 		const focusedWindow = this.windowsMainService.getFocusedWindow();

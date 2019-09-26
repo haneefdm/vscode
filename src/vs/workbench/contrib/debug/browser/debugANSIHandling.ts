@@ -7,13 +7,12 @@ import { LinkDetector } from 'vs/workbench/contrib/debug/browser/linkDetector';
 import { RGBA, Color } from 'vs/base/common/color';
 import { IThemeService } from 'vs/platform/theme/common/themeService';
 import { ansiColorIdentifiers } from 'vs/workbench/contrib/terminal/common/terminalColorRegistry';
-import { IDebugSession } from 'vs/workbench/contrib/debug/common/debug';
 
 /**
  * @param text The content to stylize.
  * @returns An {@link HTMLSpanElement} that contains the potentially stylized text.
  */
-export function handleANSIOutput(text: string, linkDetector: LinkDetector, themeService: IThemeService, debugSession: IDebugSession): HTMLSpanElement {
+export function handleANSIOutput(text: string, linkDetector: LinkDetector, themeService: IThemeService): HTMLSpanElement {
 
 	const root: HTMLSpanElement = document.createElement('span');
 	const textLength: number = text.length;
@@ -54,7 +53,7 @@ export function handleANSIOutput(text: string, linkDetector: LinkDetector, theme
 			if (sequenceFound) {
 
 				// Flush buffer with previous styles.
-				appendStylizedStringToContainer(root, buffer, styleNames, linkDetector, debugSession, customFgColor, customBgColor);
+				appendStylizedStringToContainer(root, buffer, styleNames, linkDetector, customFgColor, customBgColor);
 
 				buffer = '';
 
@@ -100,7 +99,7 @@ export function handleANSIOutput(text: string, linkDetector: LinkDetector, theme
 
 	// Flush remaining text buffer if not empty.
 	if (buffer) {
-		appendStylizedStringToContainer(root, buffer, styleNames, linkDetector, debugSession, customFgColor, customBgColor);
+		appendStylizedStringToContainer(root, buffer, styleNames, linkDetector, customFgColor, customBgColor);
 	}
 
 	return root;
@@ -268,7 +267,6 @@ export function appendStylizedStringToContainer(
 	stringContent: string,
 	cssClasses: string[],
 	linkDetector: LinkDetector,
-	debugSession: IDebugSession,
 	customTextColor?: RGBA,
 	customBackgroundColor?: RGBA
 ): void {
@@ -276,7 +274,7 @@ export function appendStylizedStringToContainer(
 		return;
 	}
 
-	const container = linkDetector.linkify(stringContent, true, debugSession.root);
+	const container = linkDetector.handleLinks(stringContent);
 
 	container.className = cssClasses.join(' ');
 	if (customTextColor) {

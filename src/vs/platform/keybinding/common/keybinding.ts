@@ -41,7 +41,7 @@ export interface IKeyboardEvent {
 export const IKeybindingService = createDecorator<IKeybindingService>('keybindingService');
 
 export interface IKeybindingService {
-	_serviceBrand: undefined;
+	_serviceBrand: any;
 
 	onDidUpdateKeybindings: Event<IKeybindingEvent>;
 
