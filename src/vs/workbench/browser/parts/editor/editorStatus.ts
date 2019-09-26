@@ -35,7 +35,7 @@ import { ICommandService, CommandsRegistry } from 'vs/platform/commands/common/c
 import { IExtensionGalleryService } from 'vs/platform/extensionManagement/common/extensionManagement';
 import { ITextFileService, SUPPORTED_ENCODINGS } from 'vs/workbench/services/textfile/common/textfiles';
 import { ICursorPositionChangedEvent } from 'vs/editor/common/controller/cursorEvents';
-import { IConfigurationChangedEvent, IEditorOptions } from 'vs/editor/common/config/editorOptions';
+import { ConfigurationChangedEvent, IEditorOptions, EditorOption } from 'vs/editor/common/config/editorOptions';
 import { ITextResourceConfigurationService } from 'vs/editor/common/services/resourceConfiguration';
 import { ConfigurationTarget, IConfigurationService } from 'vs/platform/configuration/common/configuration';
 import { deepClone } from 'vs/base/common/objects';
@@ -49,7 +49,7 @@ import { INotificationHandle, INotificationService, Severity } from 'vs/platform
 import { Event } from 'vs/base/common/event';
 import { IAccessibilityService, AccessibilitySupport } from 'vs/platform/accessibility/common/accessibility';
 import { IWorkbenchContribution } from 'vs/workbench/common/contributions';
-import { IStatusbarEntryAccessor, IStatusbarService, StatusbarAlignment, IStatusbarEntry } from 'vs/platform/statusbar/common/statusbar';
+import { IStatusbarEntryAccessor, IStatusbarService, StatusbarAlignment, IStatusbarEntry } from 'vs/workbench/services/statusbar/common/statusbar';
 
 class SideBySideEditorEncodingSupport implements IEncodingSupport {
 	constructor(private master: IEncodingSupport, private details: IEncodingSupport) { }
@@ -203,8 +203,6 @@ class State {
 	private _metadata: string | undefined;
 	get metadata(): string | undefined { return this._metadata; }
 
-	constructor() { }
-
 	update(update: StateDelta): StateChange {
 		const change = new StateChange();
 
@@ -325,7 +323,7 @@ export class EditorStatus extends Disposable implements IWorkbenchContribution {
 		if (!this.screenReaderNotification) {
 			this.screenReaderNotification = this.notificationService.prompt(
 				Severity.Info,
-				nls.localize('screenReaderDetectedExplanation.question', "Are you using a screen reader to operate VS Code? (Certain features like folding, minimap or word wrap are disabled when using a screen reader)"),
+				nls.localize('screenReaderDetectedExplanation.question', "Are you using a screen reader to operate VS Code? (Certain features like word wrap are disabled when using a screen reader)"),
 				[{
 					label: nls.localize('screenReaderDetectedExplanation.answerYes', "Yes"),
 					run: () => {
@@ -583,8 +581,8 @@ export class EditorStatus extends Disposable implements IWorkbenchContribution {
 		if (activeCodeEditor) {
 
 			// Hook Listener for Configuration changes
-			this.activeEditorListeners.add(activeCodeEditor.onDidChangeConfiguration((event: IConfigurationChangedEvent) => {
-				if (event.accessibilitySupport) {
+			this.activeEditorListeners.add(activeCodeEditor.onDidChangeConfiguration((event: ConfigurationChangedEvent) => {
+				if (event.hasChanged(EditorOption.accessibilitySupport)) {
 					this.onScreenReaderModeChange(activeCodeEditor);
 				}
 			}));
@@ -708,7 +706,7 @@ export class EditorStatus extends Disposable implements IWorkbenchContribution {
 				}
 			}
 
-			screenReaderMode = (editorWidget.getConfiguration().accessibilitySupport === AccessibilitySupport.Enabled);
+			screenReaderMode = (editorWidget.getOption(EditorOption.accessibilitySupport) === AccessibilitySupport.Enabled);
 		}
 
 		if (screenReaderMode === false && this.screenReaderNotification) {
@@ -758,7 +756,7 @@ export class EditorStatus extends Disposable implements IWorkbenchContribution {
 	private onEOLChange(editorWidget: ICodeEditor | undefined): void {
 		const info: StateDelta = { EOL: undefined };
 
-		if (editorWidget && !editorWidget.getConfiguration().readOnly) {
+		if (editorWidget && !editorWidget.getOption(EditorOption.readOnly)) {
 			const codeEditorModel = editorWidget.getModel();
 			if (codeEditorModel) {
 				info.EOL = codeEditorModel.getEOL();
@@ -819,8 +817,7 @@ function isWritableCodeEditor(codeEditor: ICodeEditor | undefined): boolean {
 	if (!codeEditor) {
 		return false;
 	}
-	const config = codeEditor.getConfiguration();
-	return (!config.readOnly);
+	return !codeEditor.getOption(EditorOption.readOnly);
 }
 
 function isWritableBaseEditor(e: IBaseEditor): boolean {
@@ -898,21 +895,9 @@ export class ChangeModeAction extends Action {
 				description = nls.localize('languageDescriptionConfigured', "({0})", this.modeService.getModeIdForLanguageName(lang.toLowerCase()));
 			}
 
-			// construct a fake resource to be able to show nice icons if any
-			let fakeResource: URI | undefined;
-			const extensions = this.modeService.getExtensions(lang);
-			if (extensions && extensions.length) {
-				fakeResource = URI.file(extensions[0]);
-			} else {
-				const filenames = this.modeService.getFilenames(lang);
-				if (filenames && filenames.length) {
-					fakeResource = URI.file(filenames[0]);
-				}
-			}
-
 			return {
 				label: lang,
-				iconClasses: getIconClasses(this.modelService, this.modeService, fakeResource),
+				iconClasses: getIconClasses(this.modelService, this.modeService, this.getFakeResource(lang)),
 				description
 			};
 		});
@@ -1002,7 +987,7 @@ export class ChangeModeAction extends Action {
 	private configureFileAssociation(resource: URI): void {
 		const extension = extname(resource);
 		const base = basename(resource);
-		const currentAssociation = this.modeService.getModeIdByFilepathOrFirstLine(resource.with({ path: base }));
+		const currentAssociation = this.modeService.getModeIdByFilepathOrFirstLine(URI.file(base));
 
 		const languages = this.modeService.getRegisteredLanguageNames();
 		const picks: IQuickPickItem[] = languages.sort().map((lang, index) => {
@@ -1011,6 +996,7 @@ export class ChangeModeAction extends Action {
 			return {
 				id,
 				label: lang,
+				iconClasses: getIconClasses(this.modelService, this.modeService, this.getFakeResource(lang)),
 				description: (id === currentAssociation) ? nls.localize('currentAssociation', "Current Association") : undefined
 			};
 		});
@@ -1029,7 +1015,7 @@ export class ChangeModeAction extends Action {
 
 				// If the association is already being made in the workspace, make sure to target workspace settings
 				let target = ConfigurationTarget.USER;
-				if (fileAssociationsConfig.workspace && !!fileAssociationsConfig.workspace[associationKey]) {
+				if (fileAssociationsConfig.workspace && !!(fileAssociationsConfig.workspace as any)[associationKey]) {
 					target = ConfigurationTarget.WORKSPACE;
 				}
 
@@ -1040,6 +1026,22 @@ export class ChangeModeAction extends Action {
 				this.configurationService.updateValue(FILES_ASSOCIATIONS_CONFIG, currentAssociations, target);
 			}
 		}, 50 /* quick open is sensitive to being opened so soon after another */);
+	}
+
+	private getFakeResource(lang: string): URI | undefined {
+		let fakeResource: URI | undefined;
+
+		const extensions = this.modeService.getExtensions(lang);
+		if (extensions && extensions.length) {
+			fakeResource = URI.file(extensions[0]);
+		} else {
+			const filenames = this.modeService.getFilenames(lang);
+			if (filenames && filenames.length) {
+				fakeResource = URI.file(filenames[0]);
+			}
+		}
+
+		return fakeResource;
 	}
 }
 
@@ -1155,7 +1157,7 @@ export class ChangeEncodingAction extends Action {
 
 		let guessedEncoding: string | undefined = undefined;
 		if (this.fileService.canHandleResource(resource)) {
-			const content = await this.textFileService.read(resource, { autoGuessEncoding: true, acceptTextOnly: true });
+			const content = await this.textFileService.read(resource, { autoGuessEncoding: true });
 			guessedEncoding = content.encoding;
 		}
 

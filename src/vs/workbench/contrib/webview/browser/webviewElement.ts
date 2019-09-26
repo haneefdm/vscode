@@ -3,20 +3,22 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { addClass, addDisposableListener } from 'vs/base/browser/dom';
 import { Emitter } from 'vs/base/common/event';
-import { URI } from 'vs/base/common/uri';
-import { Webview, WebviewContentOptions, WebviewOptions } from 'vs/workbench/contrib/webview/common/webview';
-import { IThemeService, ITheme } from 'vs/platform/theme/common/themeService';
-import { IEnvironmentService } from 'vs/platform/environment/common/environment';
-import { IFileService } from 'vs/platform/files/common/files';
 import { Disposable } from 'vs/base/common/lifecycle';
-import { areWebviewInputOptionsEqual } from 'vs/workbench/contrib/webview/browser/webviewEditorService';
-import { addDisposableListener, addClass } from 'vs/base/browser/dom';
-import { getWebviewThemeData } from 'vs/workbench/contrib/webview/common/themeing';
+import { isWeb } from 'vs/base/common/platform';
+import { URI } from 'vs/base/common/uri';
 import { IConfigurationService } from 'vs/platform/configuration/common/configuration';
-import { loadLocalResource } from 'vs/workbench/contrib/webview/common/resourceLoader';
-import { WebviewPortMappingManager } from 'vs/workbench/contrib/webview/common/portMapping';
+import { ExtensionIdentifier } from 'vs/platform/extensions/common/extensions';
+import { IFileService } from 'vs/platform/files/common/files';
 import { ITunnelService } from 'vs/platform/remote/common/tunnel';
+import { ITheme, IThemeService } from 'vs/platform/theme/common/themeService';
+import { Webview, WebviewContentOptions, WebviewOptions } from 'vs/workbench/contrib/webview/browser/webview';
+import { areWebviewInputOptionsEqual } from 'vs/workbench/contrib/webview/browser/webviewEditorService';
+import { WebviewPortMappingManager } from 'vs/workbench/contrib/webview/common/portMapping';
+import { loadLocalResource } from 'vs/workbench/contrib/webview/common/resourceLoader';
+import { getWebviewThemeData } from 'vs/workbench/contrib/webview/common/themeing';
+import { IWorkbenchEnvironmentService } from 'vs/workbench/services/environment/common/environmentService';
 
 interface WebviewContent {
 	readonly html: string;
@@ -32,27 +34,31 @@ export class IFrameWebview extends Disposable implements Webview {
 	private content: WebviewContent;
 	private _focused = false;
 
-	private readonly id: string;
-
 	private readonly _portMappingManager: WebviewPortMappingManager;
 
+	public extension: {
+		readonly location: URI;
+		readonly id?: ExtensionIdentifier;
+	} | undefined;
+
 	constructor(
-		private _options: WebviewOptions,
+		private readonly id: string,
+		_options: WebviewOptions,
 		contentOptions: WebviewContentOptions,
 		@IThemeService themeService: IThemeService,
 		@ITunnelService tunnelService: ITunnelService,
-		@IEnvironmentService private readonly environmentService: IEnvironmentService,
+		@IWorkbenchEnvironmentService private readonly environmentService: IWorkbenchEnvironmentService,
 		@IFileService private readonly fileService: IFileService,
 		@IConfigurationService private readonly _configurationService: IConfigurationService,
 	) {
 		super();
-		if (typeof environmentService.webviewEndpoint !== 'string') {
-			throw new Error('To use iframe based webviews, you must configure `environmentService.webviewEndpoint`');
+		if (!this.useExternalEndpoint && (!environmentService.options || typeof environmentService.webviewExternalEndpoint !== 'string')) {
+			throw new Error('To use iframe based webviews, you must configure `environmentService.webviewExternalEndpoint`');
 		}
 
 		this._portMappingManager = this._register(new WebviewPortMappingManager(
-			this._options.extension ? this._options.extension.location : undefined,
-			() => this.content.options.portMappings || [],
+			() => this.extension ? this.extension.location : undefined,
+			() => this.content.options.portMapping || [],
 			tunnelService
 		));
 
@@ -62,11 +68,9 @@ export class IFrameWebview extends Disposable implements Webview {
 			state: undefined
 		};
 
-		this.id = `webview-${Date.now()}`;
-
 		this.element = document.createElement('iframe');
 		this.element.sandbox.add('allow-scripts', 'allow-same-origin');
-		this.element.setAttribute('src', `${environmentService.webviewEndpoint}?id=${this.id}`);
+		this.element.setAttribute('src', `${this.externalEndpoint}/index.html?id=${this.id}`);
 		this.element.style.border = 'none';
 		this.element.style.width = '100%';
 		this.element.style.height = '100%';
@@ -114,9 +118,10 @@ export class IFrameWebview extends Disposable implements Webview {
 
 				case 'load-resource':
 					{
-						const requestPath = e.data.data.path;
-						const uri = URI.file(decodeURIComponent(requestPath));
-						this.loadResource(requestPath, uri);
+						const rawPath = e.data.data.path;
+						const normalizedPath = decodeURIComponent(rawPath);
+						const uri = URI.parse(normalizedPath.replace(/^\/(\w+)\/(.+)$/, (_, scheme, path) => scheme + ':/' + path));
+						this.loadResource(rawPath, uri);
 						return;
 					}
 
@@ -144,13 +149,25 @@ export class IFrameWebview extends Disposable implements Webview {
 		this._register(themeService.onThemeChange(this.style, this));
 	}
 
+	private get externalEndpoint(): string {
+		const endpoint = this.environmentService.webviewExternalEndpoint!.replace('{{uuid}}', this.id);
+		if (endpoint[endpoint.length - 1] === '/') {
+			return endpoint.slice(0, endpoint.length - 1);
+		}
+		return endpoint;
+	}
+
+	private get useExternalEndpoint(): boolean {
+		return isWeb || this._configurationService.getValue<boolean>('webview.experimental.useExternalEndpoint');
+	}
+
 	public mountTo(parent: HTMLElement) {
 		if (this.element) {
 			parent.appendChild(this.element);
 		}
 	}
 
-	public set options(options: WebviewContentOptions) {
+	public set contentOptions(options: WebviewContentOptions) {
 		if (areWebviewInputOptionsEqual(options, this.content.options)) {
 			return;
 		}
@@ -174,7 +191,7 @@ export class IFrameWebview extends Disposable implements Webview {
 
 	private preprocessHtml(value: string): string {
 		return value.replace(/(["'])vscode-resource:([^\s'"]+?)(["'])/gi, (_, startQuote, path, endQuote) =>
-			`${startQuote}${this.environmentService.webviewEndpoint}/vscode-resource${path}${endQuote}`);
+			`${startQuote}${this.externalEndpoint}/vscode-resource/file${path}${endQuote}`);
 	}
 
 	public update(html: string, options: WebviewContentOptions, retainContextWhenHidden: boolean) {
@@ -193,7 +210,8 @@ export class IFrameWebview extends Disposable implements Webview {
 		this._send('content', {
 			contents: this.content.html,
 			options: this.content.options,
-			state: this.content.state
+			state: this.content.state,
+			endpoint: this.externalEndpoint,
 		});
 	}
 
@@ -204,7 +222,7 @@ export class IFrameWebview extends Disposable implements Webview {
 		}
 	}
 
-	initialScrollProgress: number;
+	initialScrollProgress: number = 0;
 
 	private readonly _onDidFocus = this._register(new Emitter<void>());
 	public readonly onDidFocus = this._onDidFocus.event;
@@ -220,6 +238,10 @@ export class IFrameWebview extends Disposable implements Webview {
 
 	private readonly _onMessage = this._register(new Emitter<any>());
 	public readonly onMessage = this._onMessage.event;
+
+	private readonly _onMissingCsp = this._register(new Emitter<ExtensionIdentifier>());
+	public readonly onMissingCsp = this._onMissingCsp.event;
+
 
 	sendMessage(data: any): void {
 		this._send('message', data);
@@ -258,6 +280,10 @@ export class IFrameWebview extends Disposable implements Webview {
 		throw new Error('Method not implemented.');
 	}
 
+	runFindAction(previous: boolean): void {
+		throw new Error('Method not implemented.');
+	}
+
 	public set state(state: string | undefined) {
 		this.content = {
 			html: this.content.html,
@@ -287,7 +313,7 @@ export class IFrameWebview extends Disposable implements Webview {
 
 	private async loadResource(requestPath: string, uri: URI) {
 		try {
-			const result = await loadLocalResource(uri, this.fileService, this._options.extension ? this._options.extension.location : undefined,
+			const result = await loadLocalResource(uri, this.fileService, this.extension ? this.extension.location : undefined,
 				() => (this.content.options.localResourceRoots || []));
 
 			if (result.type === 'success') {

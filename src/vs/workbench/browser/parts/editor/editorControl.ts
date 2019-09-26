@@ -15,7 +15,6 @@ import { IEditorProgressService, LongRunningOperation } from 'vs/platform/progre
 import { IEditorGroupView, DEFAULT_EDITOR_MIN_DIMENSIONS, DEFAULT_EDITOR_MAX_DIMENSIONS } from 'vs/workbench/browser/parts/editor/editor';
 import { Event, Emitter } from 'vs/base/common/event';
 import { IVisibleEditor } from 'vs/workbench/services/editor/common/editorService';
-import { withUndefinedAsNull } from 'vs/base/common/types';
 
 export interface IOpenEditorResult {
 	readonly control: BaseEditor;
@@ -30,16 +29,16 @@ export class EditorControl extends Disposable {
 	get maximumHeight() { return this._activeControl ? this._activeControl.maximumHeight : DEFAULT_EDITOR_MAX_DIMENSIONS.height; }
 
 	private readonly _onDidFocus: Emitter<void> = this._register(new Emitter<void>());
-	get onDidFocus(): Event<void> { return this._onDidFocus.event; }
+	readonly onDidFocus: Event<void> = this._onDidFocus.event;
 
 	private _onDidSizeConstraintsChange = this._register(new Emitter<{ width: number; height: number; } | undefined>());
 	get onDidSizeConstraintsChange(): Event<{ width: number; height: number; } | undefined> { return this._onDidSizeConstraintsChange.event; }
 
-	private _activeControl: BaseEditor | null;
+	private _activeControl: BaseEditor | null = null;
 	private controls: BaseEditor[] = [];
 
-	private readonly activeControlDisposeables = this._register(new DisposableStore());
-	private dimension: Dimension;
+	private readonly activeControlDisposables = this._register(new DisposableStore());
+	private dimension: Dimension | undefined;
 	private editorOperation: LongRunningOperation;
 
 	constructor(
@@ -68,7 +67,7 @@ export class EditorControl extends Disposable {
 		const control = this.doShowEditorControl(descriptor);
 
 		// Set input
-		const editorChanged = await this.doSetInput(control, editor, withUndefinedAsNull(options));
+		const editorChanged = await this.doSetInput(control, editor, options);
 		return { control, editorChanged };
 	}
 
@@ -112,7 +111,7 @@ export class EditorControl extends Disposable {
 		if (!control.getContainer()) {
 			const controlInstanceContainer = document.createElement('div');
 			addClass(controlInstanceContainer, 'editor-instance');
-			controlInstanceContainer.id = descriptor.getId();
+			controlInstanceContainer.setAttribute('data-editor-id', descriptor.getId());
 
 			control.create(controlInstanceContainer);
 		}
@@ -139,19 +138,19 @@ export class EditorControl extends Disposable {
 		this._activeControl = control;
 
 		// Clear out previous active control listeners
-		this.activeControlDisposeables.clear();
+		this.activeControlDisposables.clear();
 
 		// Listen to control changes
 		if (control) {
-			this.activeControlDisposeables.add(control.onDidSizeConstraintsChange(e => this._onDidSizeConstraintsChange.fire(e)));
-			this.activeControlDisposeables.add(control.onDidFocus(() => this._onDidFocus.fire()));
+			this.activeControlDisposables.add(control.onDidSizeConstraintsChange(e => this._onDidSizeConstraintsChange.fire(e)));
+			this.activeControlDisposables.add(control.onDidFocus(() => this._onDidFocus.fire()));
 		}
 
 		// Indicate that size constraints could have changed due to new editor
 		this._onDidSizeConstraintsChange.fire(undefined);
 	}
 
-	private async doSetInput(control: BaseEditor, editor: EditorInput, options: EditorOptions | null): Promise<boolean> {
+	private async doSetInput(control: BaseEditor, editor: EditorInput, options: EditorOptions | undefined): Promise<boolean> {
 
 		// If the input did not change, return early and only apply the options
 		// unless the options instruct us to force open it even if it is the same
@@ -218,6 +217,12 @@ export class EditorControl extends Disposable {
 	closeEditor(editor: EditorInput): void {
 		if (this._activeControl && editor.matches(this._activeControl.input)) {
 			this.doHideActiveEditorControl();
+		}
+	}
+
+	setVisible(visible: boolean): void {
+		if (this._activeControl) {
+			this._activeControl.setVisible(visible, this.groupView);
 		}
 	}
 

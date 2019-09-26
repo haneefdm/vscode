@@ -4,16 +4,18 @@
  *--------------------------------------------------------------------------------------------*/
 
 import 'vs/css!./welcomePage';
+import 'vs/workbench/contrib/welcome/page/browser/vs_code_welcome_page';
 import { URI } from 'vs/base/common/uri';
 import * as strings from 'vs/base/common/strings';
 import { ICommandService } from 'vs/platform/commands/common/commands';
 import * as arrays from 'vs/base/common/arrays';
-import { WalkThroughInput } from 'vs/workbench/contrib/welcome/walkThrough/common/walkThroughInput';
+import { WalkThroughInput } from 'vs/workbench/contrib/welcome/walkThrough/browser/walkThroughInput';
 import { IWorkbenchContribution } from 'vs/workbench/common/contributions';
 import { IInstantiationService } from 'vs/platform/instantiation/common/instantiation';
 import { IEditorService } from 'vs/workbench/services/editor/common/editorService';
 import { onUnexpectedError, isPromiseCanceledError } from 'vs/base/common/errors';
-import { IWindowService, IURIToOpen } from 'vs/platform/windows/common/windows';
+import { IWindowOpenable } from 'vs/platform/windows/common/windows';
+import { IWorkspacesHistoryService } from 'vs/workbench/services/workspace/common/workspacesHistoryService';
 import { IWorkspaceContextService, WorkbenchState } from 'vs/platform/workspace/common/workspace';
 import { IConfigurationService, ConfigurationTarget } from 'vs/platform/configuration/common/configuration';
 import { localize } from 'vs/nls';
@@ -22,8 +24,8 @@ import { ITelemetryService } from 'vs/platform/telemetry/common/telemetry';
 import { Schemas } from 'vs/base/common/network';
 import { IBackupFileService } from 'vs/workbench/services/backup/common/backup';
 import { getInstalledExtensions, IExtensionStatus, onExtensionChanged, isKeymapExtension } from 'vs/workbench/contrib/extensions/common/extensionsUtils';
-import { IExtensionEnablementService, IExtensionManagementService, IExtensionGalleryService, IExtensionTipsService, EnablementState, ILocalExtension } from 'vs/platform/extensionManagement/common/extensionManagement';
-import { used } from 'vs/workbench/contrib/welcome/page/browser/vs_code_welcome_page';
+import { IExtensionManagementService, IExtensionGalleryService, ILocalExtension } from 'vs/platform/extensionManagement/common/extensionManagement';
+import { IExtensionEnablementService, EnablementState, IExtensionTipsService } from 'vs/workbench/services/extensionManagement/common/extensionManagement';
 import { ILifecycleService, StartupKind } from 'vs/platform/lifecycle/common/lifecycle';
 import { Disposable } from 'vs/base/common/lifecycle';
 import { splitName } from 'vs/base/common/labels';
@@ -39,10 +41,9 @@ import { ILabelService } from 'vs/platform/label/common/label';
 import { IFileService } from 'vs/platform/files/common/files';
 import { ExtensionType } from 'vs/platform/extensions/common/extensions';
 import { joinPath } from 'vs/base/common/resources';
-import { IRecentlyOpened, isRecentWorkspace, IRecentWorkspace, IRecentFolder, isRecentFolder } from 'vs/platform/history/common/history';
+import { IRecentlyOpened, isRecentWorkspace, IRecentWorkspace, IRecentFolder, isRecentFolder } from 'vs/platform/workspaces/common/workspacesHistory';
 import { CancellationToken } from 'vs/base/common/cancellation';
-
-used();
+import { IHostService } from 'vs/workbench/services/host/browser/host';
 
 const configurationKey = 'workbench.startupEditor';
 const oldConfigurationKey = 'workbench.welcome.enabled';
@@ -252,7 +253,7 @@ class WelcomePage extends Disposable {
 	constructor(
 		@IEditorService private readonly editorService: IEditorService,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
-		@IWindowService private readonly windowService: IWindowService,
+		@IWorkspacesHistoryService private readonly workspacesHistoryService: IWorkspacesHistoryService,
 		@IWorkspaceContextService private readonly contextService: IWorkspaceContextService,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
 		@ILabelService private readonly labelService: ILabelService,
@@ -263,12 +264,13 @@ class WelcomePage extends Disposable {
 		@IExtensionTipsService private readonly tipsService: IExtensionTipsService,
 		@IExtensionsWorkbenchService private readonly extensionsWorkbenchService: IExtensionsWorkbenchService,
 		@ILifecycleService lifecycleService: ILifecycleService,
-		@ITelemetryService private readonly telemetryService: ITelemetryService
+		@ITelemetryService private readonly telemetryService: ITelemetryService,
+		@IHostService private readonly hostService: IHostService
 	) {
 		super();
 		this._register(lifecycleService.onShutdown(() => this.dispose()));
 
-		const recentlyOpened = this.windowService.getRecentlyOpened();
+		const recentlyOpened = this.workspacesHistoryService.getRecentlyOpened();
 		const installedExtensions = this.instantiationService.invokeFunction(getInstalledExtensions);
 		const resource = URI.parse(require.toUrl('./vs_code_welcome_page'))
 			.with({
@@ -341,13 +343,13 @@ class WelcomePage extends Disposable {
 	private createListEntries(recents: (IRecentWorkspace | IRecentFolder)[]) {
 		return recents.map(recent => {
 			let fullPath: string;
-			let uriToOpen: IURIToOpen;
+			let windowOpenable: IWindowOpenable;
 			if (isRecentFolder(recent)) {
-				uriToOpen = { folderUri: recent.folderUri };
+				windowOpenable = { folderUri: recent.folderUri };
 				fullPath = recent.label || this.labelService.getWorkspaceLabel(recent.folderUri, { verbose: true });
 			} else {
 				fullPath = recent.label || this.labelService.getWorkspaceLabel(recent.workspace, { verbose: true });
-				uriToOpen = { workspaceUri: recent.workspace.configPath };
+				windowOpenable = { workspaceUri: recent.workspace.configPath };
 			}
 
 			const { name, parentPath } = splitName(fullPath);
@@ -364,7 +366,7 @@ class WelcomePage extends Disposable {
 					id: 'openRecentFolder',
 					from: telemetryFrom
 				});
-				this.windowService.openWindow([uriToOpen], { forceNewWindow: e.ctrlKey || e.metaKey });
+				this.hostService.openInWindow([windowOpenable], { forceNewWindow: e.ctrlKey || e.metaKey });
 				e.preventDefault();
 				e.stopPropagation();
 			});
@@ -457,7 +459,7 @@ class WelcomePage extends Disposable {
 						.then(installed => {
 							const local = installed.filter(i => areSameExtensions(extension.identifier, i.identifier))[0];
 							// TODO: Do this as part of the install to avoid multiple events.
-							return this.extensionEnablementService.setEnablement([local], EnablementState.Disabled).then(() => local);
+							return this.extensionEnablementService.setEnablement([local], EnablementState.DisabledGlobally).then(() => local);
 						});
 				});
 
@@ -472,12 +474,12 @@ class WelcomePage extends Disposable {
 							this.notificationService.info(strings.installing.replace('{0}', extensionSuggestion.name));
 						}, 300);
 						const extensionsToDisable = extensions.filter(extension => isKeymapExtension(this.tipsService, extension) && extension.globallyEnabled).map(extension => extension.local);
-						extensionsToDisable.length ? this.extensionEnablementService.setEnablement(extensionsToDisable, EnablementState.Disabled) : Promise.resolve()
+						extensionsToDisable.length ? this.extensionEnablementService.setEnablement(extensionsToDisable, EnablementState.DisabledGlobally) : Promise.resolve()
 							.then(() => {
 								return foundAndInstalled.then(foundExtension => {
 									messageDelay.cancel();
 									if (foundExtension) {
-										return this.extensionEnablementService.setEnablement([foundExtension], EnablementState.Enabled)
+										return this.extensionEnablementService.setEnablement([foundExtension], EnablementState.EnabledGlobally)
 											.then(() => {
 												/* __GDPR__FRAGMENT__
 													"WelcomePageInstalled-2" : {
@@ -491,7 +493,7 @@ class WelcomePage extends Disposable {
 													extensionId: extensionSuggestion.id,
 													outcome: installedExtension ? 'enabled' : 'installed',
 												});
-												return this.windowService.reloadWindow();
+												return this.hostService.reload();
 											});
 									} else {
 										/* __GDPR__FRAGMENT__

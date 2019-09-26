@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as nls from 'vs/nls';
-import { StatusbarAlignment, IStatusbarService, IStatusbarEntryAccessor } from 'vs/platform/statusbar/common/statusbar';
+import { StatusbarAlignment, IStatusbarService, IStatusbarEntryAccessor } from 'vs/workbench/services/statusbar/common/statusbar';
 import { Disposable, MutableDisposable } from 'vs/base/common/lifecycle';
 import { IKeymapService, areKeyboardLayoutsEqual, parseKeyboardLayoutDescription, getKeyboardLayoutId, IKeyboardLayoutInfo } from 'vs/workbench/services/keybinding/common/keymapInfo';
 import { LifecyclePhase } from 'vs/platform/lifecycle/common/lifecycle';
@@ -158,9 +158,9 @@ export class KeyboardLayoutPickerAction extends Action {
 
 			await this.fileService.resolve(file).then(undefined, (error) => {
 				return this.fileService.createFile(file, VSBuffer.fromString(KeyboardLayoutPickerAction.DEFAULT_CONTENT));
-			}).then((stat): Promise<IEditor | null> | null => {
+			}).then((stat): Promise<IEditor | undefined> | undefined => {
 				if (!stat) {
-					return null;
+					return undefined;
 				}
 				return this.editorService.openEditor({
 					resource: stat.resource,

@@ -11,10 +11,10 @@ import { ITextEditorOptions } from 'vs/platform/editor/common/editor';
 import { EditorViewColumn } from 'vs/workbench/api/common/shared/editor';
 import { EditorGroupLayout } from 'vs/workbench/services/editor/common/editorGroupsService';
 import { ServicesAccessor } from 'vs/platform/instantiation/common/instantiation';
-import { IOpenSettings, IURIToOpen, IWindowService } from 'vs/platform/windows/common/windows';
-import { IDownloadService } from 'vs/platform/download/common/download';
+import { IOpenInWindowOptions, IWindowOpenable } from 'vs/platform/windows/common/windows';
+import { IWorkspacesHistoryService } from 'vs/workbench/services/workspace/common/workspacesHistoryService';
 import { IWorkspacesService, hasWorkspaceFileExtension } from 'vs/platform/workspaces/common/workspaces';
-import { IRecent } from 'vs/platform/history/common/history';
+import { IRecent } from 'vs/platform/workspaces/common/workspacesHistory';
 import { Schemas } from 'vs/base/common/network';
 
 // -----------------------------------------------------------------
@@ -51,9 +51,9 @@ export class OpenFolderAPICommand {
 		if (!uri) {
 			return executor.executeCommand('_files.pickFolderAndOpen', { forceNewWindow: arg.forceNewWindow });
 		}
-		const options: IOpenSettings = { forceNewWindow: arg.forceNewWindow, forceReuseWindow: arg.forceReuseWindow, noRecentEntry: arg.noRecentEntry };
+		const options: IOpenInWindowOptions = { forceNewWindow: arg.forceNewWindow, forceReuseWindow: arg.forceReuseWindow, noRecentEntry: arg.noRecentEntry };
 		uri = URI.revive(uri);
-		const uriToOpen: IURIToOpen = (hasWorkspaceFileExtension(uri) || uri.scheme === Schemas.untitled) ? { workspaceUri: uri } : { folderUri: uri };
+		const uriToOpen: IWindowOpenable = (hasWorkspaceFileExtension(uri) || uri.scheme === Schemas.untitled) ? { workspaceUri: uri } : { folderUri: uri };
 		return executor.executeCommand('_files.windowOpen', [uriToOpen], options);
 	}
 }
@@ -71,12 +71,16 @@ CommandsRegistry.registerCommand({
 
 interface INewWindowAPICommandOptions {
 	reuseWindow?: boolean;
+	remoteAuthority?: string;
 }
 
 export class NewWindowAPICommand {
 	public static ID = 'vscode.newWindow';
 	public static execute(executor: ICommandsExecutor, options?: INewWindowAPICommandOptions): Promise<any> {
-		return executor.executeCommand('_files.newWindow', options);
+		return executor.executeCommand('_files.newWindow', {
+			reuse: options && options.reuseWindow,
+			remoteAuthority: options && options.remoteAuthority
+		});
 	}
 }
 CommandsRegistry.registerCommand({
@@ -129,8 +133,8 @@ export class OpenAPICommand {
 CommandsRegistry.registerCommand(OpenAPICommand.ID, adjustHandler(OpenAPICommand.execute));
 
 CommandsRegistry.registerCommand('_workbench.removeFromRecentlyOpened', function (accessor: ServicesAccessor, uri: URI) {
-	const windowService = accessor.get(IWindowService);
-	return windowService.removeFromRecentlyOpened([uri]);
+	const workspacesHistoryService = accessor.get(IWorkspacesHistoryService);
+	return workspacesHistoryService.removeFromRecentlyOpened([uri]);
 });
 
 export class RemoveFromRecentlyOpenedAPICommand {
@@ -160,7 +164,7 @@ interface RecentEntry {
 }
 
 CommandsRegistry.registerCommand('_workbench.addToRecentlyOpened', async function (accessor: ServicesAccessor, recentEntry: RecentEntry) {
-	const windowService = accessor.get(IWindowService);
+	const workspacesHistoryService = accessor.get(IWorkspacesHistoryService);
 	const workspacesService = accessor.get(IWorkspacesService);
 	let recent: IRecent | undefined = undefined;
 	const uri = recentEntry.uri;
@@ -173,7 +177,12 @@ CommandsRegistry.registerCommand('_workbench.addToRecentlyOpened', async functio
 	} else {
 		recent = { fileUri: uri, label };
 	}
-	return windowService.addRecentlyOpened([recent]);
+	return workspacesHistoryService.addRecentlyOpened([recent]);
+});
+
+CommandsRegistry.registerCommand('_workbench.getRecentlyOpened', async function (accessor: ServicesAccessor) {
+	const workspacesHistoryService = accessor.get(IWorkspacesHistoryService);
+	return workspacesHistoryService.getRecentlyOpened();
 });
 
 export class SetEditorLayoutAPICommand {
@@ -206,9 +215,4 @@ CommandsRegistry.registerCommand({
 			}
 		}]
 	}
-});
-
-CommandsRegistry.registerCommand('_workbench.downloadResource', function (accessor: ServicesAccessor, resource: URI) {
-	const downloadService = accessor.get(IDownloadService);
-	return downloadService.download(resource).then(location => URI.file(location));
 });

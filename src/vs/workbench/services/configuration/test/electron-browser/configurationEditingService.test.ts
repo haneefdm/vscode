@@ -11,7 +11,7 @@ import * as fs from 'fs';
 import * as json from 'vs/base/common/json';
 import { Registry } from 'vs/platform/registry/common/platform';
 import { IEnvironmentService } from 'vs/platform/environment/common/environment';
-import { parseArgs } from 'vs/platform/environment/node/argv';
+import { parseArgs, OPTIONS } from 'vs/platform/environment/node/argv';
 import { IWorkspaceContextService } from 'vs/platform/workspace/common/workspace';
 import { TestTextFileService, workbenchInstantiationService } from 'vs/workbench/test/workbenchTestServices';
 import * as uuid from 'vs/base/common/uuid';
@@ -32,10 +32,10 @@ import { URI } from 'vs/base/common/uri';
 import { createHash } from 'crypto';
 import { RemoteAgentService } from 'vs/workbench/services/remote/electron-browser/remoteAgentServiceImpl';
 import { IRemoteAgentService } from 'vs/workbench/services/remote/common/remoteAgentService';
-import { FileService } from 'vs/workbench/services/files/common/fileService';
+import { FileService } from 'vs/platform/files/common/fileService';
 import { NullLogService } from 'vs/platform/log/common/log';
 import { Schemas } from 'vs/base/common/network';
-import { DiskFileSystemProvider } from 'vs/workbench/services/files/node/diskFileSystemProvider';
+import { DiskFileSystemProvider } from 'vs/platform/files/node/diskFileSystemProvider';
 import { IFileService } from 'vs/platform/files/common/files';
 import { ConfigurationCache } from 'vs/workbench/services/configuration/node/configurationCache';
 import { KeybindingsEditingService, IKeybindingEditingService } from 'vs/workbench/services/keybinding/common/keybindingEditing';
@@ -46,7 +46,7 @@ import { FileUserDataProvider } from 'vs/workbench/services/userData/common/file
 class TestEnvironmentService extends WorkbenchEnvironmentService {
 
 	constructor(private _appSettingsHome: URI) {
-		super(parseArgs(process.argv) as IWindowConfiguration, process.execPath);
+		super(parseArgs(process.argv, OPTIONS) as IWindowConfiguration, process.execPath, 0);
 	}
 
 	get appSettingsHome() { return this._appSettingsHome; }
@@ -185,7 +185,7 @@ suite('ConfigurationEditingService', () => {
 	test('do not notify error', () => {
 		instantiationService.stub(ITextFileService, 'isDirty', true);
 		const target = sinon.stub();
-		instantiationService.stub(INotificationService, <INotificationService>{ prompt: target, _serviceBrand: null!, notify: null!, error: null!, info: null!, warn: null!, status: null! });
+		instantiationService.stub(INotificationService, <INotificationService>{ prompt: target, _serviceBrand: undefined, notify: null!, error: null!, info: null!, warn: null!, status: null! });
 		return testObject.writeConfiguration(EditableConfigurationTarget.USER_LOCAL, { key: 'configurationEditing.service.testSetting', value: 'value' }, { donotNotifyError: true })
 			.then(() => assert.fail('Should fail with ERROR_CONFIGURATION_FILE_DIRTY error.'),
 				(error: ConfigurationEditingError) => {

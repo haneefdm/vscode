@@ -17,12 +17,12 @@ export class ResourceEditorInput extends EditorInput implements IModeSupport {
 
 	static readonly ID: string = 'workbench.editors.resourceEditorInput';
 
-	private cachedModel: ResourceEditorModel | null;
-	private modelReference: Promise<IReference<ITextEditorModel>> | null;
+	private cachedModel: ResourceEditorModel | null = null;
+	private modelReference: Promise<IReference<ITextEditorModel>> | null = null;
 
 	constructor(
 		private name: string,
-		private description: string | null,
+		private description: string | undefined,
 		private readonly resource: URI,
 		private preferredMode: string | undefined,
 		@ITextModelService private readonly textModelResolverService: ITextModelService
@@ -53,7 +53,7 @@ export class ResourceEditorInput extends EditorInput implements IModeSupport {
 		}
 	}
 
-	getDescription(): string | null {
+	getDescription(): string | undefined {
 		return this.description;
 	}
 

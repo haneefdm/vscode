@@ -12,6 +12,18 @@
 	display: flex;
 }
 
+.monaco-workbench .part.statusbar.status-border-top::after {
+	content: '';
+	position: absolute;
+	top: 0;
+	left: 0;
+	z-index: 5;
+	pointer-events: none;
+	background-color: var(--status-border-top-color);
+	width: 100%;
+	height: 1px;
+}
+
 .monaco-workbench .part.statusbar > .left-items,
 .monaco-workbench .part.statusbar > .right-items {
 	display: flex;
@@ -40,7 +52,7 @@
 .monaco-workbench .part.statusbar > .items-container > .statusbar-item.has-beak:before {
 	content: '';
 	position: absolute;
-	left: 11px;
+	left: calc(50% - 8px); /* 3px (margin) + 5px (padding) = 8px */
 	top: -5px;
 	border-bottom-width: 5px;
 	border-bottom-style: solid;

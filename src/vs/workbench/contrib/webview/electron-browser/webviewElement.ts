@@ -3,48 +3,29 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { OnBeforeRequestDetails, OnHeadersReceivedDetails, Response } from 'electron';
+import { FindInPageOptions, OnBeforeRequestDetails, OnHeadersReceivedDetails, Response, WebContents, WebviewTag } from 'electron';
 import { addClass, addDisposableListener } from 'vs/base/browser/dom';
 import { Emitter, Event } from 'vs/base/common/event';
 import { once } from 'vs/base/common/functional';
 import { Disposable } from 'vs/base/common/lifecycle';
 import { isMacintosh } from 'vs/base/common/platform';
-import { endsWith } from 'vs/base/common/strings';
 import { URI } from 'vs/base/common/uri';
 import * as modes from 'vs/editor/common/modes';
 import { IConfigurationService } from 'vs/platform/configuration/common/configuration';
+import { IEnvironmentService } from 'vs/platform/environment/common/environment';
 import { ExtensionIdentifier } from 'vs/platform/extensions/common/extensions';
 import { IFileService } from 'vs/platform/files/common/files';
 import { IInstantiationService } from 'vs/platform/instantiation/common/instantiation';
 import { ITunnelService } from 'vs/platform/remote/common/tunnel';
+import { ITelemetryService } from 'vs/platform/telemetry/common/telemetry';
 import { ITheme, IThemeService } from 'vs/platform/theme/common/themeService';
+import { Webview, WebviewContentOptions, WebviewOptions } from 'vs/workbench/contrib/webview/browser/webview';
 import { WebviewPortMappingManager } from 'vs/workbench/contrib/webview/common/portMapping';
+import { WebviewResourceScheme } from 'vs/workbench/contrib/webview/common/resourceLoader';
 import { getWebviewThemeData } from 'vs/workbench/contrib/webview/common/themeing';
-import { Webview, WebviewContentOptions, WebviewOptions, WebviewResourceScheme } from 'vs/workbench/contrib/webview/common/webview';
 import { registerFileProtocol } from 'vs/workbench/contrib/webview/electron-browser/webviewProtocols';
 import { areWebviewInputOptionsEqual } from '../browser/webviewEditorService';
-import { WebviewFindWidget } from '../browser/webviewFindWidget';
-
-export interface WebviewPortMapping {
-	readonly port: number;
-	readonly resolvedPort: number;
-}
-
-export interface WebviewOptions {
-	readonly allowSvgs?: boolean;
-	readonly extension?: {
-		readonly location: URI;
-		readonly id?: ExtensionIdentifier;
-	};
-	readonly enableFindWidget?: boolean;
-}
-
-export interface WebviewContentOptions {
-	readonly allowScripts?: boolean;
-	readonly svgWhiteList?: string[];
-	readonly localResourceRoots?: ReadonlyArray<URI>;
-	readonly portMappings?: ReadonlyArray<WebviewPortMapping>;
-}
+import { WebviewFindDelegate, WebviewFindWidget } from '../browser/webviewFindWidget';
 
 interface IKeydownEvent {
 	key: string;
@@ -66,7 +47,7 @@ class WebviewSession extends Disposable {
 	private readonly _onHeadersReceivedDelegates: Array<OnHeadersReceivedDelegate> = [];
 
 	public constructor(
-		webview: Electron.WebviewTag,
+		webview: WebviewTag,
 	) {
 		super();
 
@@ -111,8 +92,8 @@ class WebviewSession extends Disposable {
 
 class WebviewProtocolProvider extends Disposable {
 	constructor(
-		webview: Electron.WebviewTag,
-		private readonly _extensionLocation: URI | undefined,
+		webview: WebviewTag,
+		private readonly _getExtensionLocation: () => URI | undefined,
 		private readonly _getLocalResourceRoots: () => ReadonlyArray<URI>,
 		private readonly _fileService: IFileService,
 	) {
@@ -126,12 +107,12 @@ class WebviewProtocolProvider extends Disposable {
 		})));
 	}
 
-	private registerProtocols(contents: Electron.WebContents) {
+	private registerProtocols(contents: WebContents) {
 		if (contents.isDestroyed()) {
 			return;
 		}
 
-		registerFileProtocol(contents, WebviewResourceScheme, this._fileService, this._extensionLocation, () =>
+		registerFileProtocol(contents, WebviewResourceScheme, this._fileService, this._getExtensionLocation(), () =>
 			this._getLocalResourceRoots()
 		);
 	}
@@ -143,12 +124,12 @@ class WebviewPortMappingProvider extends Disposable {
 
 	constructor(
 		session: WebviewSession,
-		extensionLocation: URI | undefined,
+		getExtensionLocation: () => URI | undefined,
 		mappings: () => ReadonlyArray<modes.IWebviewPortMapping>,
 		tunnelService: ITunnelService,
 	) {
 		super();
-		this._manager = this._register(new WebviewPortMappingManager(extensionLocation, mappings, tunnelService));
+		this._manager = this._register(new WebviewPortMappingManager(getExtensionLocation, mappings, tunnelService));
 
 		session.onBeforeRequest(async details => {
 			const redirect = await this._manager.getRedirect(details.url);
@@ -157,57 +138,12 @@ class WebviewPortMappingProvider extends Disposable {
 	}
 }
 
-class SvgBlocker extends Disposable {
-
-	private readonly _onDidBlockSvg = this._register(new Emitter<void>());
-	public readonly onDidBlockSvg = this._onDidBlockSvg.event;
-
-	constructor(
-		session: WebviewSession,
-		private readonly _options: WebviewContentOptions,
-	) {
-		super();
-
-		session.onBeforeRequest(async (details) => {
-			if (details.url.indexOf('.svg') > 0) {
-				const uri = URI.parse(details.url);
-				if (uri && !uri.scheme.match(/file/i) && endsWith(uri.path, '.svg') && !this.isAllowedSvg(uri)) {
-					this._onDidBlockSvg.fire();
-					return { cancel: true };
-				}
-			}
-
-			return undefined;
-		});
-
-		session.onHeadersReceived((details) => {
-			const headers: any = details.responseHeaders;
-			const contentType: string[] = headers['content-type'] || headers['Content-Type'];
-			if (contentType && Array.isArray(contentType) && contentType.some(x => x.toLowerCase().indexOf('image/svg') >= 0)) {
-				const uri = URI.parse(details.url);
-				if (uri && !this.isAllowedSvg(uri)) {
-					this._onDidBlockSvg.fire();
-					return { cancel: true };
-				}
-			}
-			return undefined;
-		});
-	}
-
-	private isAllowedSvg(uri: URI): boolean {
-		if (this._options.svgWhiteList) {
-			return this._options.svgWhiteList.indexOf(uri.authority.toLowerCase()) >= 0;
-		}
-		return false;
-	}
-}
-
 class WebviewKeyboardHandler extends Disposable {
 
 	private _ignoreMenuShortcut = false;
 
 	constructor(
-		private readonly _webview: Electron.WebviewTag
+		private readonly _webview: WebviewTag
 	) {
 		super();
 
@@ -259,7 +195,7 @@ class WebviewKeyboardHandler extends Disposable {
 		}
 	}
 
-	private getWebContents(): Electron.WebContents | undefined {
+	private getWebContents(): WebContents | undefined {
 		const contents = this._webview.getWebContents();
 		if (contents && !contents.isDestroyed()) {
 			return contents;
@@ -285,8 +221,8 @@ interface WebviewContent {
 	readonly state: string | undefined;
 }
 
-export class WebviewElement extends Disposable implements Webview {
-	private _webview: Electron.WebviewTag | undefined;
+export class ElectronWebviewBasedWebview extends Disposable implements Webview, WebviewFindDelegate {
+	private _webview: WebviewTag | undefined;
 	private _ready: Promise<void>;
 
 	private _webviewFindWidget: WebviewFindWidget | undefined;
@@ -296,16 +232,23 @@ export class WebviewElement extends Disposable implements Webview {
 	private _focused = false;
 
 	private readonly _onDidFocus = this._register(new Emitter<void>());
-	public get onDidFocus(): Event<void> { return this._onDidFocus.event; }
+	public readonly onDidFocus: Event<void> = this._onDidFocus.event;
+
+	public extension: {
+		readonly location: URI;
+		readonly id?: ExtensionIdentifier;
+	} | undefined;
 
 	constructor(
-		private readonly _options: WebviewOptions,
+		options: WebviewOptions,
 		contentOptions: WebviewContentOptions,
 		@IInstantiationService instantiationService: IInstantiationService,
 		@IThemeService themeService: IThemeService,
 		@IFileService fileService: IFileService,
 		@ITunnelService tunnelService: ITunnelService,
 		@IConfigurationService private readonly _configurationService: IConfigurationService,
+		@ITelemetryService private readonly _telemetryService: ITelemetryService,
+		@IEnvironmentService private readonly _environementService: IEnvironmentService,
 	) {
 		super();
 		this.content = {
@@ -342,21 +285,16 @@ export class WebviewElement extends Disposable implements Webview {
 
 		this._register(new WebviewProtocolProvider(
 			this._webview,
-			this._options.extension ? this._options.extension.location : undefined,
+			() => this.extension ? this.extension.location : undefined,
 			() => (this.content.options.localResourceRoots || []),
 			fileService));
 
 		this._register(new WebviewPortMappingProvider(
 			session,
-			_options.extension ? _options.extension.location : undefined,
-			() => (this.content.options.portMappings || []),
+			() => this.extension ? this.extension.location : undefined,
+			() => (this.content.options.portMapping || []),
 			tunnelService,
 		));
-
-		if (!this._options.allowSvgs) {
-			const svgBlocker = this._register(new SvgBlocker(session, this.content.options));
-			svgBlocker.onDidBlockSvg(() => this.onDidBlockSvg());
-		}
 
 		this._register(new WebviewKeyboardHandler(this._webview));
 
@@ -388,7 +326,7 @@ export class WebviewElement extends Disposable implements Webview {
 					return;
 
 				case 'did-click-link':
-					let [uri] = event.args;
+					const [uri] = event.args;
 					this._onDidClickLink.fire(URI.parse(uri));
 					return;
 
@@ -396,12 +334,17 @@ export class WebviewElement extends Disposable implements Webview {
 					{
 						const rawEvent = event.args[0];
 						const bounds = this._webview.getBoundingClientRect();
-						window.dispatchEvent(new MouseEvent(rawEvent.type, {
-							...rawEvent,
-							clientX: rawEvent.clientX + bounds.left,
-							clientY: rawEvent.clientY + bounds.top,
-						}));
-						return;
+						try {
+							window.dispatchEvent(new MouseEvent(rawEvent.type, {
+								...rawEvent,
+								clientX: rawEvent.clientX + bounds.left,
+								clientY: rawEvent.clientY + bounds.top,
+							}));
+							return;
+						} catch {
+							// CustomEvent was treated as MouseEvent so don't do anything - https://github.com/microsoft/vscode/issues/78915
+							return;
+						}
 					}
 
 				case 'did-set-content':
@@ -434,14 +377,23 @@ export class WebviewElement extends Disposable implements Webview {
 				case 'did-blur':
 					this.handleFocusChange(false);
 					return;
+
+				case 'no-csp-found':
+					this.handleNoCspFound();
+					return;
 			}
 		}));
+
 		this._register(addDisposableListener(this._webview, 'devtools-opened', () => {
 			this._send('devtools-opened');
 		}));
 
-		if (_options.enableFindWidget) {
+		if (options.enableFindWidget) {
 			this._webviewFindWidget = this._register(instantiationService.createInstance(WebviewFindWidget, this));
+
+			this._register(addDisposableListener(this._webview, 'found-in-page', e => {
+				this._hasFindResult.fire(e.result.matches > 0);
+			}));
 		}
 
 		this.style(themeService.getTheme());
@@ -486,6 +438,9 @@ export class WebviewElement extends Disposable implements Webview {
 	private readonly _onMessage = this._register(new Emitter<any>());
 	public readonly onMessage = this._onMessage.event;
 
+	private readonly _onMissingCsp = this._register(new Emitter<ExtensionIdentifier>());
+	public readonly onMissingCsp = this._onMissingCsp.event;
+
 	private _send(channel: string, data?: any): void {
 		this._ready
 			.then(() => {
@@ -508,7 +463,7 @@ export class WebviewElement extends Disposable implements Webview {
 		};
 	}
 
-	public set options(options: WebviewContentOptions) {
+	public set contentOptions(options: WebviewContentOptions) {
 		if (areWebviewInputOptionsEqual(options, this.content.options)) {
 			return;
 		}
@@ -554,7 +509,11 @@ export class WebviewElement extends Disposable implements Webview {
 		if (!this._webview) {
 			return;
 		}
-		this._webview.focus();
+		try {
+			this._webview.focus();
+		} catch {
+			// noop
+		}
 		this._send('focus');
 
 		// Handle focus change programmatically (do not rely on event from <webview>)
@@ -568,14 +527,34 @@ export class WebviewElement extends Disposable implements Webview {
 		}
 	}
 
-	public sendMessage(data: any): void {
-		this._send('message', data);
+	private _hasAlertedAboutMissingCsp = false;
+
+	private handleNoCspFound(): void {
+		if (this._hasAlertedAboutMissingCsp) {
+			return;
+		}
+		this._hasAlertedAboutMissingCsp = true;
+
+		if (this.extension && this.extension.id) {
+			if (this._environementService.isExtensionDevelopment) {
+				this._onMissingCsp.fire(this.extension.id);
+			}
+
+			type TelemetryClassification = {
+				extension?: { classification: 'SystemMetaData', purpose: 'FeatureInsight' }
+			};
+			type TelemetryData = {
+				extension?: string,
+			};
+
+			this._telemetryService.publicLog2<TelemetryData, TelemetryClassification>('webviewMissingCsp', {
+				extension: this.extension.id.value
+			});
+		}
 	}
 
-	private onDidBlockSvg() {
-		this.sendMessage({
-			name: 'vscode-did-block-svg'
-		});
+	public sendMessage(data: any): void {
+		this._send('message', data);
 	}
 
 	private style(theme: ITheme): void {
@@ -588,7 +567,7 @@ export class WebviewElement extends Disposable implements Webview {
 	}
 
 	public layout(): void {
-		if (!this._webview) {
+		if (!this._webview || this._webview.style.width === '0px') {
 			return;
 		}
 		const contents = this._webview.getWebContents();
@@ -608,7 +587,10 @@ export class WebviewElement extends Disposable implements Webview {
 		});
 	}
 
-	public startFind(value: string, options?: Electron.FindInPageOptions) {
+	private readonly _hasFindResult = this._register(new Emitter<boolean>());
+	public readonly hasFindResult: Event<boolean> = this._hasFindResult.event;
+
+	public startFind(value: string, options?: FindInPageOptions) {
 		if (!value || !this._webview) {
 			return;
 		}
@@ -617,7 +599,7 @@ export class WebviewElement extends Disposable implements Webview {
 		options = options || {};
 
 		// FindNext must be false for a first request
-		const findOptions: Electron.FindInPageOptions = {
+		const findOptions: FindInPageOptions = {
 			forward: options.forward,
 			findNext: false,
 			matchCase: options.matchCase,
@@ -655,6 +637,7 @@ export class WebviewElement extends Disposable implements Webview {
 	}
 
 	public stopFind(keepSelection?: boolean): void {
+		this._hasFindResult.fire(false);
 		if (!this._webview) {
 			return;
 		}
@@ -671,6 +654,12 @@ export class WebviewElement extends Disposable implements Webview {
 	public hideFind() {
 		if (this._webviewFindWidget) {
 			this._webviewFindWidget.hide();
+		}
+	}
+
+	public runFindAction(previous: boolean) {
+		if (this._webviewFindWidget) {
+			this._webviewFindWidget.find(previous);
 		}
 	}
 

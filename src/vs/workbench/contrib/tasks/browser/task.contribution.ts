@@ -19,7 +19,7 @@ import { IProgressService, ProgressLocation } from 'vs/platform/progress/common/
 import * as jsonContributionRegistry from 'vs/platform/jsonschemas/common/jsonContributionRegistry';
 import { IJSONSchema } from 'vs/base/common/jsonSchema';
 
-import { StatusbarAlignment, IStatusbarService, IStatusbarEntryAccessor, IStatusbarEntry } from 'vs/platform/statusbar/common/statusbar';
+import { StatusbarAlignment, IStatusbarService, IStatusbarEntryAccessor, IStatusbarEntry } from 'vs/workbench/services/statusbar/common/statusbar';
 import { IQuickOpenRegistry, Extensions as QuickOpenExtensions, QuickOpenHandlerDescriptor } from 'vs/workbench/browser/quickopen';
 
 import { IOutputChannelRegistry, Extensions as OutputExt } from 'vs/workbench/contrib/output/common/output';
@@ -32,7 +32,7 @@ import { QuickOpenActionContributor } from '../browser/quickOpen';
 
 import { Extensions as WorkbenchExtensions, IWorkbenchContributionsRegistry, IWorkbenchContribution } from 'vs/workbench/common/contributions';
 import { IWorkbenchActionRegistry, Extensions as ActionExtensions } from 'vs/workbench/common/actions';
-import { RunAutomaticTasks, AllowAutomaticTaskRunning, DisallowAutomaticTaskRunning } from 'vs/workbench/contrib/tasks/browser/runAutomaticTasks';
+import { RunAutomaticTasks, ManageAutomaticTaskRunning } from 'vs/workbench/contrib/tasks/browser/runAutomaticTasks';
 
 let tasksCategory = nls.localize('tasksCategory', "Tasks");
 
@@ -40,8 +40,7 @@ const workbenchRegistry = Registry.as<IWorkbenchContributionsRegistry>(Workbench
 workbenchRegistry.registerWorkbenchContribution(RunAutomaticTasks, LifecyclePhase.Eventually);
 
 const actionRegistry = Registry.as<IWorkbenchActionRegistry>(ActionExtensions.WorkbenchActions);
-actionRegistry.registerWorkbenchAction(new SyncActionDescriptor(AllowAutomaticTaskRunning, AllowAutomaticTaskRunning.ID, AllowAutomaticTaskRunning.LABEL), 'Tasks: Allow Automatic Tasks in Folder', tasksCategory);
-actionRegistry.registerWorkbenchAction(new SyncActionDescriptor(DisallowAutomaticTaskRunning, DisallowAutomaticTaskRunning.ID, DisallowAutomaticTaskRunning.LABEL), 'Tasks: Disallow Automatic Tasks in Folder', tasksCategory);
+actionRegistry.registerWorkbenchAction(new SyncActionDescriptor(ManageAutomaticTaskRunning, ManageAutomaticTaskRunning.ID, ManageAutomaticTaskRunning.LABEL), 'Tasks: Manage Automatic Tasks in Folder', tasksCategory);
 
 export class TaskStatusBarContributions extends Disposable implements IWorkbenchContribution {
 	private runningTasksStatusItem: IStatusbarEntryAccessor | undefined;
@@ -256,11 +255,12 @@ const actionBarRegistry = Registry.as<IActionBarRegistry>(ActionBarExtensions.Ac
 actionBarRegistry.registerActionBarContributor(Scope.VIEWER, QuickOpenActionContributor);
 
 // tasks.json validation
-let schemaId = 'vscode://schemas/tasks';
 let schema: IJSONSchema = {
-	id: schemaId,
+	id: tasksSchemaId,
 	description: 'Task definition file',
 	type: 'object',
+	allowTrailingCommas: true,
+	allowComments: true,
 	default: {
 		version: '2.0.0',
 		tasks: [
@@ -282,6 +282,7 @@ let schema: IJSONSchema = {
 import schemaVersion1 from '../common/jsonSchema_v1';
 import schemaVersion2, { updateProblemMatchers } from '../common/jsonSchema_v2';
 import { AbstractTaskService, ConfigureTaskAction } from 'vs/workbench/contrib/tasks/browser/abstractTaskService';
+import { tasksSchemaId } from 'vs/workbench/services/configuration/common/configuration';
 schema.definitions = {
 	...schemaVersion1.definitions,
 	...schemaVersion2.definitions,
@@ -289,9 +290,9 @@ schema.definitions = {
 schema.oneOf = [...(schemaVersion2.oneOf || []), ...(schemaVersion1.oneOf || [])];
 
 let jsonRegistry = <jsonContributionRegistry.IJSONContributionRegistry>Registry.as(jsonContributionRegistry.Extensions.JSONContribution);
-jsonRegistry.registerSchema(schemaId, schema);
+jsonRegistry.registerSchema(tasksSchemaId, schema);
 
 ProblemMatcherRegistry.onMatcherChanged(() => {
 	updateProblemMatchers();
-	jsonRegistry.notifySchemaChanged(schemaId);
+	jsonRegistry.notifySchemaChanged(tasksSchemaId);
 });

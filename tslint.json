@@ -5,11 +5,14 @@
 	"rules": {
 		"no-arg": true,
 		"no-construct": true,
+		"no-debugger": true,
 		"no-duplicate-super": true,
 		"no-duplicate-switch-case": true,
 		"no-duplicate-variable": true,
+		"no-for-in-array": true,
 		"no-eval": true,
 		"no-redundant-jsdoc": true,
+		"no-restricted-globals": true,
 		"no-sparse-arrays": true,
 		"no-string-throw": true,
 		"no-unsafe-finally": true,
@@ -371,7 +374,7 @@
 				]
 			},
 			{
-				"target": "**/vs/workbench/workbench.main.ts",
+				"target": "**/vs/workbench/workbench.desktop.main.ts",
 				"restrictions": [
 					"**"
 				]
@@ -389,6 +392,14 @@
 					"**/vs/workbench/common/**",
 					"**/vs/workbench/services/*/common/**",
 					"**/vs/workbench/contrib/*/common/**"
+				]
+			},
+			{
+				"target": "**/vs/workbench/api/worker/**",
+				"restrictions": [
+					"vscode",
+					"vs/nls",
+					"**/vs/**/{common,worker}/**"
 				]
 			},
 			{
@@ -428,9 +439,24 @@
 					"**/vs/base/**/common/**",
 					"**/vs/platform/**/common/**",
 					"**/vs/editor/common/**",
+					"**/vs/workbench/workbench.web.api",
 					"**/vs/workbench/common/**",
 					"**/vs/workbench/services/**/common/**",
-					"**/vs/workbench/api/**/common/**"
+					"**/vs/workbench/api/**/common/**",
+					"vscode-textmate"
+				]
+			},
+			{
+				"target": "**/vs/workbench/services/**/worker/**",
+				"restrictions": [
+					"vs/nls",
+					"**/vs/base/**/common/**",
+					"**/vs/platform/**/common/**",
+					"**/vs/editor/common/**",
+					"**/vs/workbench/**/common/**",
+					"**/vs/workbench/**/worker/**",
+					"**/vs/workbench/services/**/common/**",
+					"vscode"
 				]
 			},
 			{
@@ -438,14 +464,16 @@
 				"restrictions": [
 					"vs/nls",
 					"vs/css!./**/*",
-					"**/vs/base/**/{common,browser}/**",
+					"**/vs/base/**/{common,browser,worker}/**",
 					"**/vs/platform/**/{common,browser}/**",
 					"**/vs/editor/{common,browser}/**",
 					"**/vs/workbench/workbench.web.api",
 					"**/vs/workbench/{common,browser}/**",
+					"**/vs/workbench/api/{common,browser}/**",
 					"**/vs/workbench/services/**/{common,browser}/**",
 					"vscode-textmate",
-					"onigasm-umd"
+					"onigasm-umd",
+					"@microsoft/applicationinsights-web"
 				]
 			},
 			{
@@ -466,7 +494,7 @@
 				"restrictions": [
 					"vs/nls",
 					"vs/css!./**/*",
-					"**/vs/base/**/{common,browser,node,electron-browser}/**",
+					"**/vs/base/**/{common,browser,worker,node,electron-browser}/**",
 					"**/vs/platform/**/{common,browser,node,electron-browser}/**",
 					"**/vs/editor/**",
 					"**/vs/workbench/{common,browser,node,electron-browser,api}/**",
@@ -511,6 +539,20 @@
 					// xterm and its addons are strictly browser-only components
 					"xterm",
 					"xterm-addon-*",
+					"**/vs/**"
+				]
+			},
+			{
+				"target": "**/vs/workbench/contrib/extensions/browser/**",
+				"restrictions": [
+					"semver-umd",
+					"**/vs/**"
+				]
+			},
+			{
+				"target": "**/vs/workbench/contrib/update/browser/update.ts",
+				"restrictions": [
+					"semver-umd",
 					"**/vs/**"
 				]
 			},
@@ -562,7 +604,11 @@
 				]
 			},
 			{
-				"target": "**/{node,electron-browser,electron-main,extensions}/**",
+				"target": "**/{node,electron-browser,electron-main}/**",
+				"restrictions": "**/*"
+			},
+			{
+				"target": "**/extensions/**",
 				"restrictions": "**/*"
 			},
 			{
@@ -573,9 +619,9 @@
 				]
 			},
 			{
-				"target": "**/test/smoke2/**",
+				"target": "**/test/automation/**",
 				"restrictions": [
-					"**/test/smoke2/**",
+					"**/test/automation/**",
 					"*"
 				]
 			},
@@ -586,6 +632,48 @@
 			{
 				"target": "**/{common,browser,workbench}/**",
 				"restrictions": "**/vs/**"
+			}
+		],
+		"no-nodejs-globals": [
+			true,
+			{
+				"target": "**/vs/base/common/{path,process,platform}.ts",
+				"allowed": [
+					"process" // -> defines safe access to process
+				]
+			},
+			{
+				"target": "**/vs/**/test/{common,browser}/**",
+				"allowed": [
+					"process",
+					"Buffer",
+					"__filename",
+					"__dirname"
+				]
+			},
+			{
+				"target": "**/vs/workbench/api/common/extHostExtensionService.ts",
+				"allowed": [
+					"global" // -> safe access to 'global'
+				]
+			},
+			{
+				"target": "**/vs/**/{common,browser}/**",
+				"allowed": [ /* none */]
+			}
+		],
+		"no-dom-globals": [
+			true,
+			{
+				"target": "**/vs/**/test/{common,node,electron-main}/**",
+				"allowed": [
+					"document",
+					"HTMLElement"
+				]
+			},
+			{
+				"target": "**/vs/**/{common,node,electron-main}/**",
+				"allowed": [ /* none */]
 			}
 		],
 		"duplicate-imports": true,

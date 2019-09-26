@@ -8,8 +8,11 @@ import { IDisposable, Disposable } from 'vs/base/common/lifecycle';
 import { isWindows } from 'vs/base/common/platform';
 import { Event, Emitter } from 'vs/base/common/event';
 import { IEnvironmentService } from 'vs/platform/environment/common/environment';
+import { LoggerChannelClient } from 'vs/platform/log/common/logIpc';
+import { URI } from 'vs/base/common/uri';
 
 export const ILogService = createServiceDecorator<ILogService>('logService');
+export const ILoggerService = createServiceDecorator<ILoggerService>('loggerService');
 
 function now(): string {
 	return new Date().toISOString();
@@ -27,18 +30,27 @@ export enum LogLevel {
 
 export const DEFAULT_LOG_LEVEL: LogLevel = LogLevel.Info;
 
-export interface ILogService extends IDisposable {
-	_serviceBrand: any;
+export interface ILogger extends IDisposable {
 	onDidChangeLogLevel: Event<LogLevel>;
-
 	getLevel(): LogLevel;
 	setLevel(level: LogLevel): void;
+
 	trace(message: string, ...args: any[]): void;
 	debug(message: string, ...args: any[]): void;
 	info(message: string, ...args: any[]): void;
 	warn(message: string, ...args: any[]): void;
 	error(message: string | Error, ...args: any[]): void;
 	critical(message: string | Error, ...args: any[]): void;
+}
+
+export interface ILogService extends ILogger {
+	_serviceBrand: undefined;
+}
+
+export interface ILoggerService {
+	_serviceBrand: undefined;
+
+	getLogger(file: URI): ILogger;
 }
 
 export abstract class AbstractLogService extends Disposable {
@@ -61,7 +73,7 @@ export abstract class AbstractLogService extends Disposable {
 
 export class ConsoleLogMainService extends AbstractLogService implements ILogService {
 
-	_serviceBrand: any;
+	_serviceBrand: undefined;
 	private useColors: boolean;
 
 	constructor(logLevel: LogLevel = DEFAULT_LOG_LEVEL) {
@@ -137,7 +149,7 @@ export class ConsoleLogMainService extends AbstractLogService implements ILogSer
 
 export class ConsoleLogService extends AbstractLogService implements ILogService {
 
-	_serviceBrand: any;
+	_serviceBrand: undefined;
 
 	constructor(logLevel: LogLevel = DEFAULT_LOG_LEVEL) {
 		super();
@@ -183,8 +195,56 @@ export class ConsoleLogService extends AbstractLogService implements ILogService
 	dispose(): void { }
 }
 
+export class ConsoleLogInMainService extends AbstractLogService implements ILogService {
+
+	_serviceBrand: undefined;
+
+	constructor(private readonly client: LoggerChannelClient, logLevel: LogLevel = DEFAULT_LOG_LEVEL) {
+		super();
+		this.setLevel(logLevel);
+	}
+
+	trace(message: string, ...args: any[]): void {
+		if (this.getLevel() <= LogLevel.Trace) {
+			this.client.consoleLog('trace', [message, ...args]);
+		}
+	}
+
+	debug(message: string, ...args: any[]): void {
+		if (this.getLevel() <= LogLevel.Debug) {
+			this.client.consoleLog('debug', [message, ...args]);
+		}
+	}
+
+	info(message: string, ...args: any[]): void {
+		if (this.getLevel() <= LogLevel.Info) {
+			this.client.consoleLog('info', [message, ...args]);
+		}
+	}
+
+	warn(message: string | Error, ...args: any[]): void {
+		if (this.getLevel() <= LogLevel.Warning) {
+			this.client.consoleLog('warn', [message, ...args]);
+		}
+	}
+
+	error(message: string, ...args: any[]): void {
+		if (this.getLevel() <= LogLevel.Error) {
+			this.client.consoleLog('error', [message, ...args]);
+		}
+	}
+
+	critical(message: string, ...args: any[]): void {
+		if (this.getLevel() <= LogLevel.Critical) {
+			this.client.consoleLog('critical', [message, ...args]);
+		}
+	}
+
+	dispose(): void { }
+}
+
 export class MultiplexLogService extends AbstractLogService implements ILogService {
-	_serviceBrand: any;
+	_serviceBrand: undefined;
 
 	constructor(private readonly logServices: ReadonlyArray<ILogService>) {
 		super();
@@ -244,7 +304,7 @@ export class MultiplexLogService extends AbstractLogService implements ILogServi
 }
 
 export class DelegatedLogService extends Disposable implements ILogService {
-	_serviceBrand: any;
+	_serviceBrand: undefined;
 
 	constructor(private logService: ILogService) {
 		super();
@@ -289,7 +349,7 @@ export class DelegatedLogService extends Disposable implements ILogService {
 }
 
 export class NullLogService implements ILogService {
-	_serviceBrand: any;
+	_serviceBrand: undefined;
 	readonly onDidChangeLogLevel: Event<LogLevel> = new Emitter<LogLevel>().event;
 	setLevel(level: LogLevel): void { }
 	getLevel(): LogLevel { return LogLevel.Info; }

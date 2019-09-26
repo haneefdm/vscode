@@ -211,6 +211,27 @@
 		};
 
 		/**
+		 * @param {MouseEvent} event
+		 */
+		const handleAuxClick = (event) => {
+			// Prevent middle clicks opening a broken link in the browser
+			if (!event.view || !event.view.document) {
+				return;
+			}
+
+			if (event.button === 1) {
+				let node = /** @type {any} */ (event.target);
+				while (node) {
+					if (node.tagName && node.tagName.toLowerCase() === 'a' && node.href) {
+						event.preventDefault();
+						break;
+					}
+					node = node.parentNode;
+				}
+			}
+		};
+
+		/**
 		 * @param {KeyboardEvent} e
 		 */
 		const handleInnerKeydown = (e) => {
@@ -279,6 +300,17 @@
 			newDocument.head.prepend(defaultStyles);
 
 			applyStyles(newDocument, newDocument.body);
+
+			// Check for CSP
+			const csp = newDocument.querySelector('meta[http-equiv="Content-Security-Policy"]');
+			if (!csp) {
+				host.postMessage('no-csp-found');
+			} else {
+				// Rewrite vscode-resource in csp
+				if (data.endpoint) {
+					csp.setAttribute('content', csp.getAttribute('content').replace(/vscode-resource:/g, data.endpoint));
+				}
+			}
 
 			// set DOCTYPE for newDocument explicitly as DOMParser.parseFromString strips it off
 			// and DOCTYPE is needed in the iframe to ensure that the user agent stylesheet is correctly overridden
@@ -367,7 +399,7 @@
 					// seeing the service worker applying properly.
 					// Fake load an empty on the correct origin and then write real html
 					// into it to get around this.
-					newFrame.src = `/fake.html?id=${ID}`;
+					newFrame.src = `./fake.html?id=${ID}`;
 				}
 				newFrame.style.cssText = 'display: block; margin: 0; overflow: hidden; position: absolute; width: 100%; height: 100%; visibility: hidden';
 				document.body.appendChild(newFrame);
@@ -380,16 +412,19 @@
 				newFrame.contentWindow.addEventListener('keydown', handleInnerKeydown);
 
 				newFrame.contentWindow.addEventListener('DOMContentLoaded', e => {
-					if (host.fakeLoad) {
-						newFrame.contentDocument.open();
-						newFrame.contentDocument.write(newDocument);
-						newFrame.contentDocument.close();
-						hookupOnLoadHandlers(newFrame);
-					}
-					const contentDocument = e.target ? (/** @type {HTMLDocument} */ (e.target)) : undefined;
-					if (contentDocument) {
-						applyStyles(contentDocument, contentDocument.body);
-					}
+					// Workaround for https://bugs.chromium.org/p/chromium/issues/detail?id=978325
+					setTimeout(() => {
+						if (host.fakeLoad) {
+							newFrame.contentDocument.open();
+							newFrame.contentDocument.write(newDocument);
+							newFrame.contentDocument.close();
+							hookupOnLoadHandlers(newFrame);
+						}
+						const contentDocument = e.target ? (/** @type {HTMLDocument} */ (e.target)) : undefined;
+						if (contentDocument) {
+							applyStyles(contentDocument, contentDocument.body);
+						}
+					}, 0);
 				});
 
 				const onLoad = (contentDocument, contentWindow) => {
@@ -444,6 +479,7 @@
 
 					// Bubble out link clicks
 					newFrame.contentWindow.addEventListener('click', handleInnerClick);
+					newFrame.contentWindow.addEventListener('auxclick', handleAuxClick);
 
 					if (host.onIframeLoaded) {
 						host.onIframeLoaded(newFrame);

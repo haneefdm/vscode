@@ -28,7 +28,7 @@ class CyclicDependencyError extends Error {
 
 export class InstantiationService implements IInstantiationService {
 
-	_serviceBrand: any;
+	_serviceBrand: undefined;
 
 	private readonly _services: ServiceCollection;
 	private readonly _strict: boolean;
@@ -206,7 +206,7 @@ export class InstantiationService implements IInstantiationService {
 		} else if (this._parent) {
 			return this._parent._createServiceInstanceWithOwner(id, ctor, args, supportsDelayedInstantiation, _trace);
 		} else {
-			throw new Error('illegalState - creating UNKNOWN service instance');
+			throw new Error(`illegalState - creating UNKNOWN service instance ${ctor.name}`);
 		}
 	}
 
@@ -222,10 +222,10 @@ export class InstantiationService implements IInstantiationService {
 			const idle = new IdleValue(() => this._createInstance<T>(ctor, args, _trace));
 			return <T>new Proxy(Object.create(null), {
 				get(_target: T, prop: PropertyKey): any {
-					return idle.getValue()[prop];
+					return (idle.getValue() as any)[prop];
 				},
 				set(_target: T, p: PropertyKey, value: any): boolean {
-					idle.getValue()[p] = value;
+					(idle.getValue() as any)[p] = value;
 					return true;
 				}
 			});

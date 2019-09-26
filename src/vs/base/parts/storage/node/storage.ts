@@ -206,7 +206,7 @@ export class SQLiteStorageDatabase implements IStorageDatabase {
 							return this.doUpdateItems(recoveryConnection, { insert: recovery() }).then(() => closeRecoveryConnection(), error => {
 
 								// In case of an error updating items, still ensure to close the connection
-								// to prevent SQLITE_BUSY errors when the connection is restablished
+								// to prevent SQLITE_BUSY errors when the connection is reestablished
 								closeRecoveryConnection();
 
 								return Promise.reject(error);
@@ -237,7 +237,7 @@ export class SQLiteStorageDatabase implements IStorageDatabase {
 		const connection = await this.whenConnected;
 		const row = await this.get(connection, full ? 'PRAGMA integrity_check' : 'PRAGMA quick_check');
 
-		const integrity = full ? row['integrity_check'] : row['quick_check'];
+		const integrity = full ? (row as any)['integrity_check'] : (row as any)['quick_check'];
 
 		if (connection.isErroneous) {
 			return `${integrity} (last error: ${connection.lastError})`;
@@ -420,8 +420,8 @@ export class SQLiteStorageDatabase implements IStorageDatabase {
 }
 
 class SQLiteStorageDatabaseLogger {
-	private readonly logTrace: (msg: string) => void;
-	private readonly logError: (error: string | Error) => void;
+	private readonly logTrace: ((msg: string) => void) | undefined;
+	private readonly logError: ((error: string | Error) => void) | undefined;
 
 	constructor(options?: ISQLiteStorageDatabaseLoggingOptions) {
 		if (options && typeof options.logTrace === 'function') {

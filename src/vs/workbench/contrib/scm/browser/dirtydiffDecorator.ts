@@ -33,7 +33,7 @@ import { rot } from 'vs/base/common/numbers';
 import { KeybindingsRegistry, KeybindingWeight } from 'vs/platform/keybinding/common/keybindingsRegistry';
 import { peekViewBorder, peekViewTitleBackground, peekViewTitleForeground, peekViewTitleInfoForeground } from 'vs/editor/contrib/referenceSearch/referencesWidget';
 import { EmbeddedDiffEditorWidget } from 'vs/editor/browser/widget/embeddedCodeEditorWidget';
-import { IDiffEditorOptions } from 'vs/editor/common/config/editorOptions';
+import { IDiffEditorOptions, EditorOption } from 'vs/editor/common/config/editorOptions';
 import { Action, IAction, ActionRunner } from 'vs/base/common/actions';
 import { IActionBarOptions, ActionsOrientation, IActionViewItem } from 'vs/base/browser/ui/actionbar/actionbar';
 import { IKeybindingService } from 'vs/platform/keybinding/common/keybinding';
@@ -149,7 +149,7 @@ function getChangeTypeColor(theme: ITheme, changeType: ChangeType): Color | unde
 	}
 }
 
-function getOuterEditorFromDiffEditor(accessor: ServicesAccessor): ICodeEditor | null {
+function getOuterEditorFromDiffEditor(accessor: ServicesAccessor): ICodeEditor | undefined {
 	const diffEditors = accessor.get(ICodeEditorService).listDiffEditors();
 
 	for (const diffEditor of diffEditors) {
@@ -223,7 +223,7 @@ class DirtyDiffWidget extends PeekViewWidget {
 
 		const position = new Position(getModifiedEndLineNumber(change), 1);
 
-		const lineHeight = this.editor.getConfiguration().lineHeight;
+		const lineHeight = this.editor.getOption(EditorOption.lineHeight);
 		const editorHeight = this.editor.getLayoutInfo().height;
 		const editorHeightInLines = Math.floor(editorHeight / lineHeight);
 		const height = Math.min(getChangeHeight(change) + /* padding */ 8, Math.floor(editorHeightInLines / 3));
@@ -234,7 +234,7 @@ class DirtyDiffWidget extends PeekViewWidget {
 		const changeTypeColor = getChangeTypeColor(this.themeService.getTheme(), changeType);
 		this.style({ frameColor: changeTypeColor, arrowColor: changeTypeColor });
 
-		this._actionbarWidget.context = [this.model.modified!.uri, this.model.changes, index];
+		this._actionbarWidget!.context = [this.model.modified!.uri, this.model.changes, index];
 		this.show(position, height);
 		this.editor.focus();
 	}
@@ -250,16 +250,16 @@ class DirtyDiffWidget extends PeekViewWidget {
 	protected _fillHead(container: HTMLElement): void {
 		super._fillHead(container);
 
-		const previous = this.instantiationService.createInstance(UIEditorAction, this.editor, new ShowPreviousChangeAction(), 'show-previous-change chevron-up');
-		const next = this.instantiationService.createInstance(UIEditorAction, this.editor, new ShowNextChangeAction(), 'show-next-change chevron-down');
+		const previous = this.instantiationService.createInstance(UIEditorAction, this.editor, new ShowPreviousChangeAction(), 'codicon-arrow-up');
+		const next = this.instantiationService.createInstance(UIEditorAction, this.editor, new ShowNextChangeAction(), 'codicon-arrow-down');
 
 		this._disposables.add(previous);
 		this._disposables.add(next);
-		this._actionbarWidget.push([previous, next], { label: false, icon: true });
+		this._actionbarWidget!.push([previous, next], { label: false, icon: true });
 
 		const actions: IAction[] = [];
 		this._disposables.add(createAndFillInActionBarActions(this.menu, { shouldForwardArgs: true }, actions));
-		this._actionbarWidget.push(actions, { label: false, icon: true });
+		this._actionbarWidget!.push(actions, { label: false, icon: true });
 	}
 
 	protected _getActionBarOptions(): IActionBarOptions {
@@ -962,7 +962,7 @@ export class DirtyDiffModel extends Disposable {
 	private repositoryDisposables = new Set<IDisposable>();
 	private readonly originalModelDisposables = this._register(new DisposableStore());
 
-	private _onDidChange = new Emitter<ISplice<IChange>[]>();
+	private readonly _onDidChange = new Emitter<ISplice<IChange>[]>();
 	readonly onDidChange: Event<ISplice<IChange>[]> = this._onDidChange.event;
 
 	private _changes: IChange[] = [];
@@ -1158,7 +1158,7 @@ export class DirtyDiffWorkbenchController extends Disposable implements ext.IWor
 	private enabled = false;
 	private models: ITextModel[] = [];
 	private items: { [modelId: string]: DirtyDiffItem; } = Object.create(null);
-	private transientDisposables: IDisposable[] = [];
+	private readonly transientDisposables = this._register(new DisposableStore());
 	private stylesheet: HTMLStyleElement;
 
 	constructor(
@@ -1204,7 +1204,7 @@ export class DirtyDiffWorkbenchController extends Disposable implements ext.IWor
 			this.disable();
 		}
 
-		this.transientDisposables.push(this.editorService.onDidVisibleEditorsChange(() => this.onEditorsChanged()));
+		this.transientDisposables.add(this.editorService.onDidVisibleEditorsChange(() => this.onEditorsChanged()));
 		this.onEditorsChanged();
 		this.enabled = true;
 	}
@@ -1214,7 +1214,7 @@ export class DirtyDiffWorkbenchController extends Disposable implements ext.IWor
 			return;
 		}
 
-		this.transientDisposables = dispose(this.transientDisposables);
+		this.transientDisposables.clear();
 		this.models.forEach(m => this.items[m.id].dispose());
 		this.models = [];
 		this.items = Object.create(null);
