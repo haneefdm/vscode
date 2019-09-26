@@ -12,7 +12,7 @@ suite('TextSearchResult', () => {
 		charsPerLine: 100
 	};
 
-	function assertOneLinePreviewRangeText(text: string, result: TextSearchMatch): void {
+	function assertPreviewRangeText(text: string, result: TextSearchMatch): void {
 		assert.equal(
 			result.preview.text.substring((<SearchRange>result.preview.matches).startColumn, (<SearchRange>result.preview.matches).endColumn),
 			text);
@@ -22,49 +22,49 @@ suite('TextSearchResult', () => {
 		const range = new OneLineRange(5, 0, 0);
 		const result = new TextSearchMatch('', range);
 		assert.deepEqual(result.ranges, range);
-		assertOneLinePreviewRangeText('', result);
+		assertPreviewRangeText('', result);
 	});
 
 	test('empty with preview options', () => {
 		const range = new OneLineRange(5, 0, 0);
 		const result = new TextSearchMatch('', range, previewOptions1);
 		assert.deepEqual(result.ranges, range);
-		assertOneLinePreviewRangeText('', result);
+		assertPreviewRangeText('', result);
 	});
 
 	test('short without preview options', () => {
 		const range = new OneLineRange(5, 4, 7);
 		const result = new TextSearchMatch('foo bar', range);
 		assert.deepEqual(result.ranges, range);
-		assertOneLinePreviewRangeText('bar', result);
+		assertPreviewRangeText('bar', result);
 	});
 
 	test('short with preview options', () => {
 		const range = new OneLineRange(5, 4, 7);
 		const result = new TextSearchMatch('foo bar', range, previewOptions1);
 		assert.deepEqual(result.ranges, range);
-		assertOneLinePreviewRangeText('bar', result);
+		assertPreviewRangeText('bar', result);
 	});
 
 	test('leading', () => {
 		const range = new OneLineRange(5, 25, 28);
 		const result = new TextSearchMatch('long text very long text foo', range, previewOptions1);
 		assert.deepEqual(result.ranges, range);
-		assertOneLinePreviewRangeText('foo', result);
+		assertPreviewRangeText('foo', result);
 	});
 
 	test('trailing', () => {
 		const range = new OneLineRange(5, 0, 3);
 		const result = new TextSearchMatch('foo long text very long text long text very long text long text very long text long text very long text long text very long text', range, previewOptions1);
 		assert.deepEqual(result.ranges, range);
-		assertOneLinePreviewRangeText('foo', result);
+		assertPreviewRangeText('foo', result);
 	});
 
 	test('middle', () => {
 		const range = new OneLineRange(5, 30, 33);
 		const result = new TextSearchMatch('long text very long text long foo text very long text long text very long text long text very long text long text very long text', range, previewOptions1);
 		assert.deepEqual(result.ranges, range);
-		assertOneLinePreviewRangeText('foo', result);
+		assertPreviewRangeText('foo', result);
 	});
 
 	test('truncating match', () => {
@@ -76,7 +76,7 @@ suite('TextSearchResult', () => {
 		const range = new OneLineRange(0, 4, 7);
 		const result = new TextSearchMatch('foo bar', range, previewOptions);
 		assert.deepEqual(result.ranges, range);
-		assertOneLinePreviewRangeText('b', result);
+		assertPreviewRangeText('b', result);
 	});
 
 	test('one line of multiline match', () => {
@@ -88,11 +88,7 @@ suite('TextSearchResult', () => {
 		const range = new SearchRange(5, 4, 6, 3);
 		const result = new TextSearchMatch('foo bar\nfoo bar', range, previewOptions);
 		assert.deepEqual(result.ranges, range);
-		assert.equal(result.preview.text, 'foo bar\nfoo bar');
-		assert.equal((<SearchRange>result.preview.matches).startLineNumber, 0);
-		assert.equal((<SearchRange>result.preview.matches).startColumn, 4);
-		assert.equal((<SearchRange>result.preview.matches).endLineNumber, 1);
-		assert.equal((<SearchRange>result.preview.matches).endColumn, 3);
+		assertPreviewRangeText('bar', result);
 	});
 
 	// test('all lines of multiline match', () => {

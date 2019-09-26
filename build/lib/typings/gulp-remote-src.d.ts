@@ -1,4 +1,4 @@
-declare module 'gulp-remote-retry-src' {
+declare module 'gulp-remote-src' {
 
 	import stream = require("stream");
 

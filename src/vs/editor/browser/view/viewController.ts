@@ -12,7 +12,6 @@ import { Selection } from 'vs/editor/common/core/selection';
 import { IConfiguration } from 'vs/editor/common/editorCommon';
 import { IViewModel } from 'vs/editor/common/viewModel/viewModel';
 import { IMouseWheelEvent } from 'vs/base/browser/mouseEvent';
-import { EditorOption } from 'vs/editor/common/config/editorOptions';
 
 export interface IMouseDispatchData {
 	position: Position;
@@ -108,7 +107,7 @@ export class ViewController {
 	}
 
 	private _hasMulticursorModifier(data: IMouseDispatchData): boolean {
-		switch (this.configuration.options.get(EditorOption.multiCursorModifier)) {
+		switch (this.configuration.editor.multiCursorModifier) {
 			case 'altKey':
 				return data.altKey;
 			case 'ctrlKey':
@@ -120,7 +119,7 @@ export class ViewController {
 	}
 
 	private _hasNonMulticursorModifier(data: IMouseDispatchData): boolean {
-		switch (this.configuration.options.get(EditorOption.multiCursorModifier)) {
+		switch (this.configuration.editor.multiCursorModifier) {
 			case 'altKey':
 				return data.ctrlKey || data.metaKey;
 			case 'ctrlKey':
@@ -133,7 +132,11 @@ export class ViewController {
 
 	public dispatchMouse(data: IMouseDispatchData): void {
 		if (data.middleButton) {
-			this._columnSelect(data.position, data.mouseColumn, data.inSelectionMode);
+			if (data.inSelectionMode) {
+				this._columnSelect(data.position, data.mouseColumn);
+			} else {
+				this.moveTo(data.position);
+			}
 		} else if (data.startedOnLineNumbers) {
 			// If the dragging started on the gutter, then have operations work on the entire line
 			if (this._hasMulticursorModifier(data)) {
@@ -179,7 +182,7 @@ export class ViewController {
 			if (this._hasMulticursorModifier(data)) {
 				if (!this._hasNonMulticursorModifier(data)) {
 					if (data.shiftKey) {
-						this._columnSelect(data.position, data.mouseColumn, true);
+						this._columnSelect(data.position, data.mouseColumn);
 					} else {
 						// Do multi-cursor operations only when purely alt is pressed
 						if (data.inSelectionMode) {
@@ -192,7 +195,7 @@ export class ViewController {
 			} else {
 				if (data.inSelectionMode) {
 					if (data.altKey) {
-						this._columnSelect(data.position, data.mouseColumn, true);
+						this._columnSelect(data.position, data.mouseColumn);
 					} else {
 						this._moveToSelect(data.position);
 					}
@@ -219,13 +222,12 @@ export class ViewController {
 		this._execMouseCommand(CoreNavigationCommands.MoveToSelect, this._usualArgs(viewPosition));
 	}
 
-	private _columnSelect(viewPosition: Position, mouseColumn: number, doColumnSelect: boolean): void {
+	private _columnSelect(viewPosition: Position, mouseColumn: number): void {
 		viewPosition = this._validateViewColumn(viewPosition);
 		this._execMouseCommand(CoreNavigationCommands.ColumnSelect, {
 			position: this._convertViewToModelPosition(viewPosition),
 			viewPosition: viewPosition,
-			mouseColumn: mouseColumn,
-			doColumnSelect: doColumnSelect
+			mouseColumn: mouseColumn
 		});
 	}
 

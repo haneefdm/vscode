@@ -5,8 +5,10 @@ Make sure you are on **Node v10.x**.
 ### Run
 
 ```bash
-# Install Dependencies and Compile
-yarn --cwd test/smoke
+# Compile
+cd test/smoke
+yarn compile
+cd ../..
 
 # Dev
 yarn smoketest
@@ -24,7 +26,7 @@ You must always run the smoketest version which matches the release you are test
 
 ```bash
 git checkout release/1.22
-yarn --cwd test/smoke
+yarn
 ```
 
 In addition to the new build to be released you will need the previous stable build so that the smoketest can test the data migration.

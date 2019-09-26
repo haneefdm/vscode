@@ -15,7 +15,6 @@ import { RenderingContext, RestrictedRenderingContext } from 'vs/editor/common/v
 import { ViewContext } from 'vs/editor/common/view/viewContext';
 import * as viewEvents from 'vs/editor/common/view/viewEvents';
 import { ITheme } from 'vs/platform/theme/common/themeService';
-import { EditorOption } from 'vs/editor/common/config/editorOptions';
 
 class Settings {
 
@@ -43,24 +42,22 @@ class Settings {
 	public readonly w: number[];
 
 	constructor(config: IConfiguration, theme: ITheme) {
-		const options = config.options;
-		this.lineHeight = options.get(EditorOption.lineHeight);
-		this.pixelRatio = options.get(EditorOption.pixelRatio);
-		this.overviewRulerLanes = options.get(EditorOption.overviewRulerLanes);
+		this.lineHeight = config.editor.lineHeight;
+		this.pixelRatio = config.editor.pixelRatio;
+		this.overviewRulerLanes = config.editor.viewInfo.overviewRulerLanes;
 
-		this.renderBorder = options.get(EditorOption.overviewRulerBorder);
+		this.renderBorder = config.editor.viewInfo.overviewRulerBorder;
 		const borderColor = theme.getColor(editorOverviewRulerBorder);
 		this.borderColor = borderColor ? borderColor.toString() : null;
 
-		this.hideCursor = options.get(EditorOption.hideCursorInOverviewRuler);
+		this.hideCursor = config.editor.viewInfo.hideCursorInOverviewRuler;
 		const cursorColor = theme.getColor(editorCursorForeground);
 		this.cursorColor = cursorColor ? cursorColor.transparent(0.7).toString() : null;
 
 		this.themeType = theme.type;
 
-		const minimapOpts = options.get(EditorOption.minimap);
-		const minimapEnabled = minimapOpts.enabled;
-		const minimapSide = minimapOpts.side;
+		const minimapEnabled = config.editor.viewInfo.minimap.enabled;
+		const minimapSide = config.editor.viewInfo.minimap.side;
 		const backgroundColor = (minimapEnabled ? TokenizationRegistry.getDefaultBackground() : null);
 		if (backgroundColor === null || minimapSide === 'left') {
 			this.backgroundColor = null;
@@ -68,8 +65,7 @@ class Settings {
 			this.backgroundColor = Color.Format.CSS.formatHex(backgroundColor);
 		}
 
-		const layoutInfo = options.get(EditorOption.layoutInfo);
-		const position = layoutInfo.overviewRuler;
+		const position = config.editor.layoutInfo.overviewRuler;
 		this.top = position.top;
 		this.right = position.right;
 		this.domWidth = position.width;
@@ -205,7 +201,7 @@ export class DecorationsOverviewRuler extends ViewPart {
 
 	private readonly _tokensColorTrackerListener: IDisposable;
 	private readonly _domNode: FastDomNode<HTMLCanvasElement>;
-	private _settings!: Settings;
+	private _settings: Settings;
 	private _cursorPositions: Position[];
 
 	constructor(context: ViewContext) {

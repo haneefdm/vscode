@@ -15,10 +15,6 @@ export interface IExtHostSocketMessage {
 	skipWebSocketFrames: boolean;
 }
 
-export interface IExtHostReduceGraceTimeMessage {
-	type: 'VSCODE_EXTHOST_IPC_REDUCE_GRACE_TIME';
-}
-
 export const enum MessageType {
 	Initialized,
 	Ready,

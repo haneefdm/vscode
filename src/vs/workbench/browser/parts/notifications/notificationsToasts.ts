@@ -21,7 +21,7 @@ import { localize } from 'vs/nls';
 import { Severity } from 'vs/platform/notification/common/notification';
 import { ScrollbarVisibility } from 'vs/base/common/scrollable';
 import { ILifecycleService, LifecyclePhase } from 'vs/platform/lifecycle/common/lifecycle';
-import { IHostService } from 'vs/workbench/services/host/browser/host';
+import { IWindowService } from 'vs/platform/windows/common/windows';
 import { timeout } from 'vs/base/common/async';
 
 interface INotificationToast {
@@ -54,7 +54,7 @@ export class NotificationsToasts extends Themable {
 
 	private notificationsToastsContainer: HTMLElement;
 	private workbenchDimensions: Dimension;
-	private isNotificationsCenterVisible: boolean | undefined;
+	private isNotificationsCenterVisible: boolean;
 	private mapNotificationToToast: Map<INotificationViewItem, INotificationToast>;
 	private notificationsToastsVisibleContextKey: IContextKey<boolean>;
 
@@ -67,7 +67,7 @@ export class NotificationsToasts extends Themable {
 		@IEditorGroupsService private readonly editorGroupService: IEditorGroupsService,
 		@IContextKeyService contextKeyService: IContextKeyService,
 		@ILifecycleService private readonly lifecycleService: ILifecycleService,
-		@IHostService private readonly hostService: IHostService
+		@IWindowService private readonly windowService: IWindowService
 	) {
 		super(themeService);
 
@@ -135,7 +135,7 @@ export class NotificationsToasts extends Themable {
 		// Make Visible
 		addClass(this.notificationsToastsContainer, 'visible');
 
-		const itemDisposables = new DisposableStore();
+		const itemDisposeables = new DisposableStore();
 
 		// Container
 		const notificationToastContainer = document.createElement('div');
@@ -158,12 +158,12 @@ export class NotificationsToasts extends Themable {
 			ariaLabel: localize('notificationsToast', "Notification Toast"),
 			verticalScrollMode: ScrollbarVisibility.Hidden
 		});
-		itemDisposables.add(notificationList);
+		itemDisposeables.add(notificationList);
 
-		const toast: INotificationToast = { item, list: notificationList, container: notificationToastContainer, toast: notificationToast, toDispose: itemDisposables };
+		const toast: INotificationToast = { item, list: notificationList, container: notificationToastContainer, toast: notificationToast, toDispose: itemDisposeables };
 		this.mapNotificationToToast.set(item, toast);
 
-		itemDisposables.add(toDisposable(() => {
+		itemDisposeables.add(toDisposable(() => {
 			if (this.isVisible(toast)) {
 				this.notificationsToastsContainer.removeChild(toast.container);
 			}
@@ -184,12 +184,12 @@ export class NotificationsToasts extends Themable {
 		this.layoutContainer(maxDimensions.height);
 
 		// Update when item height changes due to expansion
-		itemDisposables.add(item.onDidExpansionChange(() => {
+		itemDisposeables.add(item.onDidExpansionChange(() => {
 			notificationList.updateNotificationsList(0, 1, [item]);
 		}));
 
 		// Update when item height potentially changes due to label changes
-		itemDisposables.add(item.onDidLabelChange(e => {
+		itemDisposeables.add(item.onDidLabelChange(e => {
 			if (!item.expanded) {
 				return; // dynamic height only applies to expanded notifications
 			}
@@ -205,7 +205,7 @@ export class NotificationsToasts extends Themable {
 		});
 
 		// Automatically purge non-sticky notifications
-		this.purgeNotification(item, notificationToastContainer, notificationList, itemDisposables);
+		this.purgeNotification(item, notificationToastContainer, notificationList, itemDisposeables);
 
 		// Theming
 		this.updateStyles();
@@ -215,7 +215,7 @@ export class NotificationsToasts extends Themable {
 
 		// Animate in
 		addClass(notificationToast, 'notification-fade-in');
-		itemDisposables.add(addDisposableListener(notificationToast, 'transitionend', () => {
+		itemDisposeables.add(addDisposableListener(notificationToast, 'transitionend', () => {
 			removeClass(notificationToast, 'notification-fade-in');
 			addClass(notificationToast, 'notification-fade-in-done');
 		}));
@@ -236,13 +236,14 @@ export class NotificationsToasts extends Themable {
 
 			purgeTimeoutHandle = setTimeout(() => {
 
-				// If the window does not have focus, we wait for the window to gain focus
-				// again before triggering the timeout again. This prevents an issue where
-				// focussing the window could immediately hide the notification because the
-				// timeout was triggered again.
-				if (!this.hostService.hasFocus) {
+				// If the notification is sticky or prompting and the window does not have
+				// focus, we wait for the window to gain focus again before triggering
+				// the timeout again. This prevents an issue where focussing the window
+				// could immediately hide the notification because the timeout was triggered
+				// again.
+				if ((item.sticky || item.hasPrompt()) && !this.windowService.hasFocus) {
 					if (!listener) {
-						listener = this.hostService.onDidChangeFocus(focus => {
+						listener = this.windowService.onDidChangeFocus(focus => {
 							if (focus) {
 								hideAfterTimeout();
 							}

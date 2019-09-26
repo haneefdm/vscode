@@ -3,12 +3,11 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createDecorator } from 'vs/platform/instantiation/common/instantiation';
+import { ServiceIdentifier, createDecorator } from 'vs/platform/instantiation/common/instantiation';
 import { Event } from 'vs/base/common/event';
 import { MenuBarVisibility } from 'vs/platform/windows/common/windows';
 import { ILayoutService } from 'vs/platform/layout/browser/layoutService';
 import { Part } from 'vs/workbench/browser/part';
-import { Dimension } from 'vs/base/browser/dom';
 
 export const IWorkbenchLayoutService = createDecorator<IWorkbenchLayoutService>('layoutService');
 
@@ -27,9 +26,14 @@ export const enum Position {
 	BOTTOM
 }
 
+export interface ILayoutOptions {
+	toggleMaximizedPanel?: boolean;
+	source?: Parts;
+}
+
 export interface IWorkbenchLayoutService extends ILayoutService {
 
-	_serviceBrand: undefined;
+	_serviceBrand: ServiceIdentifier<any>;
 
 	/**
 	 * Emits when the visibility of the title bar changes.
@@ -76,11 +80,6 @@ export interface IWorkbenchLayoutService extends ILayoutService {
 	 * Returns if the part is visible.
 	 */
 	isVisible(part: Parts): boolean;
-
-	/**
-	 * Returns if the part is visible.
-	 */
-	getDimension(part: Parts): Dimension;
 
 	/**
 	 * Set activity bar hidden or not
@@ -138,16 +137,6 @@ export interface IWorkbenchLayoutService extends ILayoutService {
 	 * Sets the panel position.
 	 */
 	setPanelPosition(position: Position): void;
-
-	/**
-	 * Gets the maximum possible size for editor.
-	 */
-	getMaximumEditorDimensions(): Dimension;
-
-	/**
-	 * Returns the element that is parent of the workbench element.
-	 */
-	getWorkbenchContainer(): HTMLElement;
 
 	/**
 	 * Returns the element that contains the workbench.

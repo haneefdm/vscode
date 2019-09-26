@@ -367,7 +367,7 @@ assertComputeEdits(file1, file2);
 
 class TestTextResourcePropertiesService implements ITextResourcePropertiesService {
 
-	_serviceBrand: undefined;
+	_serviceBrand: any;
 
 	constructor(
 		@IConfigurationService private readonly configurationService: IConfigurationService,

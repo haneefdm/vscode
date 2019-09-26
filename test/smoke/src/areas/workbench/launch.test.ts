@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as path from 'path';
-import { Application, ApplicationOptions } from '../../../../automation';
+import { Application, ApplicationOptions } from '../../application';
 
 export function setup() {
 

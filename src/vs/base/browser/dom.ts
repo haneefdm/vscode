@@ -15,7 +15,7 @@ import { Disposable, IDisposable, toDisposable } from 'vs/base/common/lifecycle'
 import * as platform from 'vs/base/common/platform';
 import { coalesce } from 'vs/base/common/arrays';
 import { URI } from 'vs/base/common/uri';
-import { Schemas, RemoteAuthorities } from 'vs/base/common/network';
+import { Schemas } from 'vs/base/common/network';
 
 export function clearNode(node: HTMLElement): void {
 	while (node.firstChild) {
@@ -34,7 +34,7 @@ export function isInDOM(node: Node | null): boolean {
 		if (node === document.body) {
 			return true;
 		}
-		node = node.parentNode || (node as ShadowRoot).host;
+		node = node.parentNode;
 	}
 	return false;
 }
@@ -50,8 +50,8 @@ interface IDomClassList {
 
 const _manualClassList = new class implements IDomClassList {
 
-	private _lastStart: number = -1;
-	private _lastEnd: number = -1;
+	private _lastStart: number;
+	private _lastEnd: number;
 
 	private _findClassName(node: HTMLElement, className: string): void {
 
@@ -203,16 +203,16 @@ export const toggleClass: (node: HTMLElement | SVGElement, className: string, sh
 class DomListener implements IDisposable {
 
 	private _handler: (e: any) => void;
-	private _node: EventTarget;
+	private _node: Element | Window | Document;
 	private readonly _type: string;
-	private readonly _options: boolean | AddEventListenerOptions;
+	private readonly _useCapture: boolean;
 
-	constructor(node: EventTarget, type: string, handler: (e: any) => void, options?: boolean | AddEventListenerOptions) {
+	constructor(node: Element | Window | Document, type: string, handler: (e: any) => void, useCapture?: boolean) {
 		this._node = node;
 		this._type = type;
 		this._handler = handler;
-		this._options = (options || false);
-		this._node.addEventListener(this._type, this._handler, this._options);
+		this._useCapture = (useCapture || false);
+		this._node.addEventListener(this._type, this._handler, this._useCapture);
 	}
 
 	public dispose(): void {
@@ -221,7 +221,7 @@ class DomListener implements IDisposable {
 			return;
 		}
 
-		this._node.removeEventListener(this._type, this._handler, this._options);
+		this._node.removeEventListener(this._type, this._handler, this._useCapture);
 
 		// Prevent leakers from holding on to the dom or handler func
 		this._node = null!;
@@ -229,10 +229,9 @@ class DomListener implements IDisposable {
 	}
 }
 
-export function addDisposableListener<K extends keyof GlobalEventHandlersEventMap>(node: EventTarget, type: K, handler: (event: GlobalEventHandlersEventMap[K]) => void, useCapture?: boolean): IDisposable;
-export function addDisposableListener(node: EventTarget, type: string, handler: (event: any) => void, useCapture?: boolean): IDisposable;
-export function addDisposableListener(node: EventTarget, type: string, handler: (event: any) => void, useCapture: AddEventListenerOptions): IDisposable;
-export function addDisposableListener(node: EventTarget, type: string, handler: (event: any) => void, useCapture?: boolean | AddEventListenerOptions): IDisposable {
+export function addDisposableListener<K extends keyof GlobalEventHandlersEventMap>(node: Element | Window | Document, type: K, handler: (event: GlobalEventHandlersEventMap[K]) => void, useCapture?: boolean): IDisposable;
+export function addDisposableListener(node: Element | Window | Document, type: string, handler: (event: any) => void, useCapture?: boolean): IDisposable;
+export function addDisposableListener(node: Element | Window | Document, type: string, handler: (event: any) => void, useCapture?: boolean): IDisposable {
 	return new DomListener(node, type, handler, useCapture);
 }
 
@@ -560,11 +559,13 @@ class SizeUtils {
 // Position & Dimension
 
 export class Dimension {
+	public width: number;
+	public height: number;
 
-	constructor(
-		public readonly width: number,
-		public readonly height: number,
-	) { }
+	constructor(width: number, height: number) {
+		this.width = width;
+		this.height = height;
+	}
 
 	static equals(a: Dimension | undefined, b: Dimension | undefined): boolean {
 		if (a === b) {
@@ -805,8 +806,7 @@ export function createCSSRule(selector: string, cssText: string, style: HTMLStyl
 	if (!style || !cssText) {
 		return;
 	}
-
-	(<CSSStyleSheet>style.sheet).insertRule(selector + '{' + cssText + '}', 0);
+	style.textContent = `${selector}{${cssText}}\n${style.textContent}`;
 }
 
 export function removeCSSRulesContainingSelector(ruleName: string, style: HTMLStyleElement = getSharedStyleSheet()): void {
@@ -854,7 +854,6 @@ export const EventType = {
 	KEY_UP: 'keyup',
 	// HTML Document
 	LOAD: 'load',
-	BEFORE_UNLOAD: 'beforeunload',
 	UNLOAD: 'unload',
 	ABORT: 'abort',
 	ERROR: 'error',
@@ -1185,24 +1184,22 @@ export function animate(fn: () => void): IDisposable {
 	return toDisposable(() => stepDisposable.dispose());
 }
 
-RemoteAuthorities.setPreferredWebSchema(/^https:/.test(window.location.href) ? 'https' : 'http');
+
+
+const _location = URI.parse(window.location.href);
 
 export function asDomUri(uri: URI): URI {
 	if (!uri) {
 		return uri;
 	}
+	if (!platform.isWeb) {
+		//todo@joh remove this once we have sw in electron going
+		return uri;
+	}
 	if (Schemas.vscodeRemote === uri.scheme) {
-		return RemoteAuthorities.rewrite(uri);
+		// rewrite vscode-remote-uris to uris of the window location
+		// so that they can be intercepted by the service worker
+		return _location.with({ path: '/vscode-resources/fetch', query: uri.toString() });
 	}
 	return uri;
-}
-
-/**
- * returns url('...')
- */
-export function asCSSUrl(uri: URI): string {
-	if (!uri) {
-		return `url('')`;
-	}
-	return `url('${asDomUri(uri).toString(true).replace(/'/g, '%27')}')`;
 }

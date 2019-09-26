@@ -16,7 +16,6 @@ import { editorCodeLensForeground } from 'vs/editor/common/view/editorColorRegis
 import { CodeLensItem } from 'vs/editor/contrib/codelens/codelens';
 import { editorActiveLinkForeground } from 'vs/platform/theme/common/colorRegistry';
 import { registerThemingParticipant } from 'vs/platform/theme/common/themeService';
-import { EditorOption } from 'vs/editor/common/config/editorOptions';
 
 class CodeLensViewZone implements editorBrowser.IViewZone {
 
@@ -61,7 +60,7 @@ class CodeLensContentWidget implements editorBrowser.IContentWidget {
 	private readonly _editor: editorBrowser.ICodeEditor;
 	private readonly _commands = new Map<string, Command>();
 
-	private _widgetPosition?: editorBrowser.IContentWidgetPosition;
+	private _widgetPosition: editorBrowser.IContentWidgetPosition;
 
 	constructor(
 		editor: editorBrowser.ICodeEditor,
@@ -81,9 +80,7 @@ class CodeLensContentWidget implements editorBrowser.IContentWidget {
 	}
 
 	updateHeight(): void {
-		const options = this._editor.getOptions();
-		const fontInfo = options.get(EditorOption.fontInfo);
-		const lineHeight = options.get(EditorOption.lineHeight);
+		const { fontInfo, lineHeight } = this._editor.getConfiguration();
 		this._domNode.style.height = `${Math.round(lineHeight * 1.1)}px`;
 		this._domNode.style.lineHeight = `${lineHeight}px`;
 		this._domNode.style.fontSize = `${Math.round(fontInfo.fontSize * 0.9)}px`;
@@ -150,8 +147,8 @@ class CodeLensContentWidget implements editorBrowser.IContentWidget {
 		};
 	}
 
-	getPosition(): editorBrowser.IContentWidgetPosition | null {
-		return this._widgetPosition || null;
+	getPosition(): editorBrowser.IContentWidgetPosition {
+		return this._widgetPosition;
 	}
 
 	isVisible(): boolean {
@@ -195,9 +192,9 @@ export class CodeLensHelper {
 export class CodeLensWidget {
 
 	private readonly _editor: editorBrowser.ICodeEditor;
-	private readonly _viewZone!: CodeLensViewZone;
-	private readonly _viewZoneId!: string;
-	private readonly _contentWidget!: CodeLensContentWidget;
+	private readonly _viewZone: CodeLensViewZone;
+	private readonly _viewZoneId: number;
+	private readonly _contentWidget: CodeLensContentWidget;
 	private _decorationIds: string[];
 	private _data: CodeLensItem[];
 

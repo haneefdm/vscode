@@ -30,7 +30,6 @@ import { getDefinitionsAtPosition, getImplementationsAtPosition, getTypeDefiniti
 import { CommandsRegistry } from 'vs/platform/commands/common/commands';
 import { EditorStateCancellationTokenSource, CodeEditorStateFlag } from 'vs/editor/browser/core/editorState';
 import { ISymbolNavigationService } from 'vs/editor/contrib/goToDefinition/goToDefinitionResultsNavigation';
-import { EditorOption } from 'vs/editor/common/config/editorOptions';
 
 export class DefinitionActionConfig {
 
@@ -138,7 +137,7 @@ export class DefinitionAction extends EditorAction {
 		const msg = model.getAriaMessage();
 		alert(msg);
 
-		const gotoLocation = editor.getOption(EditorOption.gotoLocation);
+		const { gotoLocation } = editor.getConfiguration().contribInfo;
 		if (this._configuration.openInPeek || (gotoLocation.multiple === 'peek' && model.references.length > 1)) {
 			this._openInPeek(editorService, editor, model);
 
@@ -162,7 +161,7 @@ export class DefinitionAction extends EditorAction {
 		}
 	}
 
-	private _openReference(editor: ICodeEditor, editorService: ICodeEditorService, reference: Location | LocationLink, sideBySide: boolean): Promise<ICodeEditor | undefined> {
+	private _openReference(editor: ICodeEditor, editorService: ICodeEditorService, reference: Location | LocationLink, sideBySide: boolean): Promise<ICodeEditor | null> {
 		// range is the target-selection-range when we have one
 		// and the the fallback is the 'full' range
 		let range: IRange | undefined = undefined;

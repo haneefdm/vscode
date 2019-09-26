@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as assert from 'assert';
-import { env, extensions, ExtensionKind, UIKind } from 'vscode';
+import { env, extensions, ExtensionKind } from 'vscode';
 
 suite('env-namespace', () => {
 
@@ -14,7 +14,6 @@ suite('env-namespace', () => {
 		assert.equal(typeof env.appName, 'string');
 		assert.equal(typeof env.machineId, 'string');
 		assert.equal(typeof env.sessionId, 'string');
-		assert.equal(typeof env.shell, 'string');
 	});
 
 	test('env is readonly', function () {
@@ -23,30 +22,24 @@ suite('env-namespace', () => {
 		assert.throws(() => (env as any).appName = '234');
 		assert.throws(() => (env as any).machineId = '234');
 		assert.throws(() => (env as any).sessionId = '234');
-		assert.throws(() => (env as any).shell = '234');
 	});
 
 	test('env.remoteName', function () {
 		const remoteName = env.remoteName;
-		const knownWorkspaceExtension = extensions.getExtension('vscode.git');
-		const knownUiExtension = extensions.getExtension('vscode.git-ui');
+		const apiTestExtension = extensions.getExtension('vscode.vscode-api-tests');
+		const testResolverExtension = extensions.getExtension('vscode.vscode-test-resolver');
 		if (typeof remoteName === 'undefined') {
-			// not running in remote, so we expect both extensions
-			assert.ok(knownWorkspaceExtension);
-			assert.ok(knownUiExtension);
-			assert.equal(ExtensionKind.UI, knownUiExtension!.extensionKind);
+			assert.ok(apiTestExtension);
+			assert.ok(testResolverExtension);
+			assert.equal(ExtensionKind.UI, apiTestExtension!.extensionKind);
+			assert.equal(ExtensionKind.UI, testResolverExtension!.extensionKind);
 		} else if (typeof remoteName === 'string') {
-			// running in remote, so we only expect workspace extensions
-			assert.ok(knownWorkspaceExtension);
-			assert.ok(!knownUiExtension); // we currently can only access extensions that run on same host
-			assert.equal(ExtensionKind.Workspace, knownWorkspaceExtension!.extensionKind);
+			assert.ok(apiTestExtension);
+			assert.ok(!testResolverExtension); // we currently can only access extensions that run on same host
+			assert.equal(ExtensionKind.Workspace, apiTestExtension!.extensionKind);
 		} else {
 			assert.fail();
 		}
 	});
 
-	test('env.uiKind', function () {
-		const kind = env.uiKind;
-		assert.equal(kind, UIKind.Desktop);
-	});
 });

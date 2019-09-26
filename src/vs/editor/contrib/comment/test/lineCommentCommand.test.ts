@@ -986,8 +986,7 @@ suite('Editor Contrib - Line Comment in mixed modes', () => {
 			selection,
 			(sel) => new LineCommentCommand(sel, 4, Type.Toggle),
 			expectedLines,
-			expectedSelection,
-			true
+			expectedSelection
 		);
 		innerMode.dispose();
 		outerMode.dispose();

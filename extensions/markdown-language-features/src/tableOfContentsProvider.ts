@@ -15,17 +15,12 @@ export interface TocEntry {
 	readonly location: vscode.Location;
 }
 
-export interface SkinnyTextLine {
-	text: string;
-}
-
 export interface SkinnyTextDocument {
 	readonly uri: vscode.Uri;
 	readonly version: number;
 	readonly lineCount: number;
-
-	lineAt(line: number): SkinnyTextLine;
 	getText(): string;
+	lineAt(line: number): vscode.TextLine;
 }
 
 export class TableOfContentsProvider {
@@ -77,8 +72,7 @@ export class TableOfContentsProvider {
 				text: TableOfContentsProvider.getHeaderText(line.text),
 				level: TableOfContentsProvider.getHeaderLevel(heading.markup),
 				line: lineNumber,
-				location: new vscode.Location(document.uri,
-					new vscode.Range(lineNumber, 0, lineNumber, line.text.length))
+				location: new vscode.Location(document.uri, line.range)
 			});
 		}
 
@@ -91,13 +85,13 @@ export class TableOfContentsProvider {
 					break;
 				}
 			}
-			const endLine = end !== undefined ? end : document.lineCount - 1;
+			const endLine = typeof end === 'number' ? end : document.lineCount - 1;
 			return {
 				...entry,
 				location: new vscode.Location(document.uri,
 					new vscode.Range(
 						entry.location.range.start,
-						new vscode.Position(endLine, document.lineAt(endLine).text.length)))
+						new vscode.Position(endLine, document.lineAt(endLine).range.end.character)))
 			};
 		});
 	}

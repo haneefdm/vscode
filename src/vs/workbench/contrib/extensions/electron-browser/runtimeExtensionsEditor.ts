@@ -6,7 +6,8 @@
 import 'vs/css!./media/runtimeExtensionsEditor';
 import * as nls from 'vs/nls';
 import * as os from 'os';
-import product from 'vs/platform/product/common/product';
+import product from 'vs/platform/product/node/product';
+import pkg from 'vs/platform/product/node/package';
 import { Action, IAction } from 'vs/base/common/actions';
 import { BaseEditor } from 'vs/workbench/browser/parts/editor/baseEditor';
 import { ITelemetryService } from 'vs/platform/telemetry/common/telemetry';
@@ -22,9 +23,9 @@ import { ActionBar, Separator } from 'vs/base/browser/ui/actionbar/actionbar';
 import { dispose, IDisposable } from 'vs/base/common/lifecycle';
 import { RunOnceScheduler } from 'vs/base/common/async';
 import { clipboard } from 'electron';
-import { EnablementState } from 'vs/workbench/services/extensionManagement/common/extensionManagement';
+import { EnablementState } from 'vs/platform/extensionManagement/common/extensionManagement';
 import { IContextMenuService } from 'vs/platform/contextview/browser/contextView';
-import { IElectronService } from 'vs/platform/electron/node/electron';
+import { IWindowService, IWindowsService } from 'vs/platform/windows/common/windows';
 import { writeFile } from 'vs/base/node/pfs';
 import { IEnvironmentService } from 'vs/platform/environment/common/environment';
 import { memoize } from 'vs/base/common/decorators';
@@ -43,8 +44,6 @@ import { ExtensionIdentifier, ExtensionType, IExtensionDescription } from 'vs/pl
 import { REMOTE_HOST_SCHEME } from 'vs/platform/remote/common/remoteHosts';
 import { SlowExtensionAction } from 'vs/workbench/contrib/extensions/electron-browser/extensionsSlowActions';
 import { IWorkbenchEnvironmentService } from 'vs/workbench/services/environment/common/environmentService';
-import { IOpenerService } from 'vs/platform/opener/common/opener';
-import { URI } from 'vs/base/common/uri';
 
 export const IExtensionHostProfileService = createDecorator<IExtensionHostProfileService>('extensionHostProfileService');
 export const CONTEXT_PROFILE_SESSION_STATE = new RawContextKey<string>('profileSessionState', 'none');
@@ -58,7 +57,7 @@ export enum ProfileSessionState {
 }
 
 export interface IExtensionHostProfileService {
-	_serviceBrand: undefined;
+	_serviceBrand: any;
 
 	readonly onDidChangeState: Event<void>;
 	readonly onDidChangeLastProfile: Event<void>;
@@ -121,8 +120,7 @@ export class RuntimeExtensionsEditor extends BaseEditor {
 		@IExtensionHostProfileService private readonly _extensionHostProfileService: IExtensionHostProfileService,
 		@IStorageService storageService: IStorageService,
 		@ILabelService private readonly _labelService: ILabelService,
-		@IWorkbenchEnvironmentService private readonly _environmentService: IWorkbenchEnvironmentService,
-		@IOpenerService private readonly _openerService: IOpenerService
+		@IWorkbenchEnvironmentService private readonly _environmentService: IWorkbenchEnvironmentService
 	) {
 		super(RuntimeExtensionsEditor.ID, telemetryService, themeService, storageService);
 
@@ -307,56 +305,54 @@ export class RuntimeExtensionsEditor extends BaseEditor {
 
 				const activationTimes = element.status.activationTimes!;
 				let syncTime = activationTimes.codeLoadingTime + activationTimes.activateCallTime;
-				data.activationTime.textContent = activationTimes.activationReason.startup ? `Startup Activation: ${syncTime}ms` : `Activation: ${syncTime}ms`;
+				data.activationTime.textContent = activationTimes.startup ? `Startup Activation: ${syncTime}ms` : `Activation: ${syncTime}ms`;
 
 				data.actionbar.clear();
 				if (element.unresponsiveProfile) {
 					data.actionbar.push(this._instantiationService.createInstance(SlowExtensionAction, element.description, element.unresponsiveProfile), { icon: true, label: true });
 				}
 				if (isNonEmptyArray(element.status.runtimeErrors)) {
-					data.actionbar.push(new ReportExtensionIssueAction(element, this._openerService), { icon: true, label: true });
+					data.actionbar.push(new ReportExtensionIssueAction(element), { icon: true, label: true });
 				}
 
 				let title: string;
-				const activationId = activationTimes.activationReason.extensionId.value;
-				const activationEvent = activationTimes.activationReason.activationEvent;
-				if (activationEvent === '*') {
-					title = nls.localize('starActivation', "Activated by {0} on start-up", activationId);
-				} else if (/^workspaceContains:/.test(activationEvent)) {
-					let fileNameOrGlob = activationEvent.substr('workspaceContains:'.length);
+				if (activationTimes.activationEvent === '*') {
+					title = nls.localize('starActivation', "Activated on start-up");
+				} else if (/^workspaceContains:/.test(activationTimes.activationEvent)) {
+					let fileNameOrGlob = activationTimes.activationEvent.substr('workspaceContains:'.length);
 					if (fileNameOrGlob.indexOf('*') >= 0 || fileNameOrGlob.indexOf('?') >= 0) {
 						title = nls.localize({
 							key: 'workspaceContainsGlobActivation',
 							comment: [
 								'{0} will be a glob pattern'
 							]
-						}, "Activated by {1} because a file matching {1} exists in your workspace", fileNameOrGlob, activationId);
+						}, "Activated because a file matching {0} exists in your workspace", fileNameOrGlob);
 					} else {
 						title = nls.localize({
 							key: 'workspaceContainsFileActivation',
 							comment: [
 								'{0} will be a file name'
 							]
-						}, "Activated by {1} because file {0} exists in your workspace", fileNameOrGlob, activationId);
+						}, "Activated because file {0} exists in your workspace", fileNameOrGlob);
 					}
-				} else if (/^workspaceContainsTimeout:/.test(activationEvent)) {
-					const glob = activationEvent.substr('workspaceContainsTimeout:'.length);
+				} else if (/^workspaceContainsTimeout:/.test(activationTimes.activationEvent)) {
+					const glob = activationTimes.activationEvent.substr('workspaceContainsTimeout:'.length);
 					title = nls.localize({
 						key: 'workspaceContainsTimeout',
 						comment: [
 							'{0} will be a glob pattern'
 						]
-					}, "Activated by {1} because searching for {0} took too long", glob, activationId);
-				} else if (/^onLanguage:/.test(activationEvent)) {
-					let language = activationEvent.substr('onLanguage:'.length);
-					title = nls.localize('languageActivation', "Activated by {1} because you opened a {0} file", language, activationId);
+					}, "Activated because searching for {0} took too long", glob);
+				} else if (/^onLanguage:/.test(activationTimes.activationEvent)) {
+					let language = activationTimes.activationEvent.substr('onLanguage:'.length);
+					title = nls.localize('languageActivation', "Activated because you opened a {0} file", language);
 				} else {
 					title = nls.localize({
 						key: 'workspaceGenericActivation',
 						comment: [
 							'The {0} placeholder will be an activation event, like e.g. \'language:typescript\', \'debug\', etc.'
 						]
-					}, "Activated by {1} on {0}", activationEvent, activationId);
+					}, "Activated on {0}", activationTimes.activationEvent);
 				}
 				data.activationTime.title = title;
 
@@ -405,13 +401,11 @@ export class RuntimeExtensionsEditor extends BaseEditor {
 			}
 		};
 
-		this._list = this._instantiationService.createInstance(WorkbenchList,
-			'RuntimeExtensions',
-			parent, delegate, [renderer], {
+		this._list = this._instantiationService.createInstance(WorkbenchList, parent, delegate, [renderer], {
 			multipleSelectionSupport: false,
 			setRowLineHeight: false,
 			horizontalScrolling: false
-		});
+		}) as WorkbenchList<IRuntimeExtension>;
 
 		this._list.splice(0, this._list.length, this._elements || undefined);
 
@@ -422,12 +416,12 @@ export class RuntimeExtensionsEditor extends BaseEditor {
 
 			const actions: IAction[] = [];
 
-			actions.push(new ReportExtensionIssueAction(e.element, this._openerService));
+			actions.push(new ReportExtensionIssueAction(e.element));
 			actions.push(new Separator());
 
 			if (e.element.marketplaceInfo) {
-				actions.push(new Action('runtimeExtensionsEditor.action.disableWorkspace', nls.localize('disable workspace', "Disable (Workspace)"), undefined, true, () => this._extensionsWorkbenchService.setEnablement(e.element!.marketplaceInfo, EnablementState.DisabledWorkspace)));
-				actions.push(new Action('runtimeExtensionsEditor.action.disable', nls.localize('disable', "Disable"), undefined, true, () => this._extensionsWorkbenchService.setEnablement(e.element!.marketplaceInfo, EnablementState.DisabledGlobally)));
+				actions.push(new Action('runtimeExtensionsEditor.action.disableWorkspace', nls.localize('disable workspace', "Disable (Workspace)"), undefined, true, () => this._extensionsWorkbenchService.setEnablement(e.element!.marketplaceInfo, EnablementState.WorkspaceDisabled)));
+				actions.push(new Action('runtimeExtensionsEditor.action.disable', nls.localize('disable', "Disable"), undefined, true, () => this._extensionsWorkbenchService.setEnablement(e.element!.marketplaceInfo, EnablementState.Disabled)));
 				actions.push(new Separator());
 			}
 			const state = this._extensionHostProfileService.state;
@@ -486,7 +480,7 @@ export class ReportExtensionIssueAction extends Action {
 		marketplaceInfo: IExtension;
 		status?: IExtensionsStatus;
 		unresponsiveProfile?: IExtensionHostProfile
-	}, @IOpenerService private readonly openerService: IOpenerService) {
+	}) {
 		super(ReportExtensionIssueAction._id, ReportExtensionIssueAction._label, 'extension-action report-issue');
 		this.enabled = extension.marketplaceInfo
 			&& extension.marketplaceInfo.type === ExtensionType.User
@@ -496,7 +490,7 @@ export class ReportExtensionIssueAction extends Action {
 	}
 
 	async run(): Promise<void> {
-		this.openerService.open(URI.parse(this._url));
+		window.open(this._url);
 	}
 
 	private static _generateNewIssueUrl(extension: {
@@ -505,11 +499,13 @@ export class ReportExtensionIssueAction extends Action {
 		status?: IExtensionsStatus;
 		unresponsiveProfile?: IExtensionHostProfile
 	}): string {
+
+
 		let baseUrl = extension.marketplaceInfo && extension.marketplaceInfo.type === ExtensionType.User && extension.description.repository ? extension.description.repository.url : undefined;
 		if (!!baseUrl) {
 			baseUrl = `${baseUrl.indexOf('.git') !== -1 ? baseUrl.substr(0, baseUrl.length - 4) : baseUrl}/issues/new/`;
 		} else {
-			baseUrl = product.reportIssueUrl!;
+			baseUrl = product.reportIssueUrl;
 		}
 
 		let reason = 'Bug';
@@ -524,7 +520,7 @@ export class ReportExtensionIssueAction extends Action {
 - Extension Name: \`${extension.description.name}\`
 - Extension Version: \`${extension.description.version}\`
 - OS Version: \`${osVersion}\`
-- VSCode version: \`${product.version}\`\n\n${message}`
+- VSCode version: \`${pkg.version}\`\n\n${message}`
 		);
 
 		return `${baseUrl}${queryStringPrefix}body=${body}&title=${encodeURIComponent(title)}`;
@@ -538,7 +534,7 @@ export class DebugExtensionHostAction extends Action {
 
 	constructor(
 		@IDebugService private readonly _debugService: IDebugService,
-		@IElectronService private readonly _electronService: IElectronService,
+		@IWindowsService private readonly _windowsService: IWindowsService,
 		@IDialogService private readonly _dialogService: IDialogService,
 		@IExtensionService private readonly _extensionService: IExtensionService,
 	) {
@@ -557,7 +553,7 @@ export class DebugExtensionHostAction extends Action {
 				secondaryButton: nls.localize('cancel', "Cancel")
 			});
 			if (res.confirmed) {
-				this._electronService.relaunch({ addArgs: [`--inspect-extensions=${randomPort()}`] });
+				this._windowsService.relaunch({ addArgs: [`--inspect-extensions=${randomPort()}`] });
 			}
 		}
 
@@ -611,7 +607,7 @@ export class SaveExtensionHostProfileAction extends Action {
 
 	constructor(
 		id: string = SaveExtensionHostProfileAction.ID, label: string = SaveExtensionHostProfileAction.LABEL,
-		@IElectronService private readonly _electronService: IElectronService,
+		@IWindowService private readonly _windowService: IWindowService,
 		@IEnvironmentService private readonly _environmentService: IEnvironmentService,
 		@IExtensionHostProfileService private readonly _extensionHostProfileService: IExtensionHostProfileService,
 	) {
@@ -626,7 +622,7 @@ export class SaveExtensionHostProfileAction extends Action {
 	}
 
 	private async _asyncRun(): Promise<any> {
-		let picked = await this._electronService.showSaveDialog({
+		let picked = await this._windowService.showSaveDialog({
 			title: 'Save Extension Host Profile',
 			buttonLabel: 'Save',
 			defaultPath: `CPU-${new Date().toISOString().replace(/[\-:]/g, '')}.cpuprofile`,
@@ -636,14 +632,12 @@ export class SaveExtensionHostProfileAction extends Action {
 			}]
 		});
 
-		if (!picked || !picked.filePath || picked.canceled) {
+		if (!picked) {
 			return;
 		}
 
 		const profileInfo = this._extensionHostProfileService.lastProfile;
 		let dataToWrite: object = profileInfo ? profileInfo.data : {};
-
-		let savePath = picked.filePath;
 
 		if (this._environmentService.isBuilt) {
 			const profiler = await import('v8-inspect-profiler');
@@ -655,9 +649,9 @@ export class SaveExtensionHostProfileAction extends Action {
 			let tmp = profiler.rewriteAbsolutePaths({ profile: dataToWrite as any }, 'piiRemoved');
 			dataToWrite = tmp.profile;
 
-			savePath = savePath + '.txt';
+			picked = picked + '.txt';
 		}
 
-		return writeFile(savePath, JSON.stringify(profileInfo ? profileInfo.data : {}, null, '\t'));
+		return writeFile(picked, JSON.stringify(profileInfo ? profileInfo.data : {}, null, '\t'));
 	}
 }

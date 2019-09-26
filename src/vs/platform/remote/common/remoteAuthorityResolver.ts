@@ -13,15 +13,6 @@ export interface ResolvedAuthority {
 	readonly port: number;
 }
 
-export interface ResolvedOptions {
-	readonly extensionHostEnv?: { [key: string]: string | null };
-}
-
-export interface ResolverResult {
-	authority: ResolvedAuthority;
-	options?: ResolvedOptions;
-}
-
 export enum RemoteAuthorityResolverErrorCode {
 	Unknown = 'Unknown',
 	NotAvailable = 'NotAvailable',
@@ -68,11 +59,11 @@ export class RemoteAuthorityResolverError extends Error {
 
 export interface IRemoteAuthorityResolverService {
 
-	_serviceBrand: undefined;
+	_serviceBrand: any;
 
-	resolveAuthority(authority: string): Promise<ResolverResult>;
+	resolveAuthority(authority: string): Promise<ResolvedAuthority>;
 
 	clearResolvedAuthority(authority: string): void;
-	setResolvedAuthority(resolvedAuthority: ResolvedAuthority, resolvedOptions?: ResolvedOptions): void;
+	setResolvedAuthority(resolvedAuthority: ResolvedAuthority): void;
 	setResolvedAuthorityError(authority: string, err: any): void;
 }

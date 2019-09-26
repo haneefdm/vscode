@@ -22,8 +22,7 @@ import { ILinkComputerTarget, computeLinks } from 'vs/editor/common/modes/linkCo
 import { BasicInplaceReplace } from 'vs/editor/common/modes/supports/inplaceReplaceSupport';
 import { IDiffComputationResult } from 'vs/editor/common/services/editorWorkerService';
 import { createMonacoBaseAPI } from 'vs/editor/common/standalone/standaloneBase';
-import * as types from 'vs/base/common/types';
-import { EditorWorkerHost } from 'vs/editor/common/services/editorWorkerServiceImpl';
+import { getAllPropertyNames } from 'vs/base/common/types';
 
 export interface IMirrorModel {
 	readonly uri: URI;
@@ -31,11 +30,7 @@ export interface IMirrorModel {
 	getValue(): string;
 }
 
-export interface IWorkerContext<H = undefined> {
-	/**
-	 * A proxy to the main thread host object.
-	 */
-	host: H;
+export interface IWorkerContext {
 	/**
 	 * Get all available mirror models in this worker.
 	 */
@@ -327,53 +322,17 @@ declare var require: any;
 /**
  * @internal
  */
-export class EditorSimpleWorker implements IRequestHandler, IDisposable {
-	_requestHandlerBrand: any;
-
-	private readonly _host: EditorWorkerHost;
-	private _models: { [uri: string]: MirrorModel; };
+export abstract class BaseEditorSimpleWorker {
 	private readonly _foreignModuleFactory: IForeignModuleFactory | null;
 	private _foreignModule: any;
 
-	constructor(host: EditorWorkerHost, foreignModuleFactory: IForeignModuleFactory | null) {
-		this._host = host;
-		this._models = Object.create(null);
+	constructor(foreignModuleFactory: IForeignModuleFactory | null) {
 		this._foreignModuleFactory = foreignModuleFactory;
 		this._foreignModule = null;
 	}
 
-	public dispose(): void {
-		this._models = Object.create(null);
-	}
-
-	protected _getModel(uri: string): ICommonModel {
-		return this._models[uri];
-	}
-
-	private _getModels(): ICommonModel[] {
-		let all: MirrorModel[] = [];
-		Object.keys(this._models).forEach((key) => all.push(this._models[key]));
-		return all;
-	}
-
-	public acceptNewModel(data: IRawModelData): void {
-		this._models[data.url] = new MirrorModel(URI.parse(data.url), data.lines, data.EOL, data.versionId);
-	}
-
-	public acceptModelChanged(strURL: string, e: IModelChangedEvent): void {
-		if (!this._models[strURL]) {
-			return;
-		}
-		let model = this._models[strURL];
-		model.onEvents(e);
-	}
-
-	public acceptRemovedModel(strURL: string): void {
-		if (!this._models[strURL]) {
-			return;
-		}
-		delete this._models[strURL];
-	}
+	protected abstract _getModel(uri: string): ICommonModel;
+	protected abstract _getModels(): ICommonModel[];
 
 	// ---- BEGIN diff --------------------------------------------------------------------------
 
@@ -481,7 +440,7 @@ export class EditorSimpleWorker implements IRequestHandler, IDisposable {
 			}
 
 			// make sure diff won't take too long
-			if (Math.max(text.length, original.length) > EditorSimpleWorker._diffLimit) {
+			if (Math.max(text.length, original.length) > BaseEditorSimpleWorker._diffLimit) {
 				result.push({ range, text });
 				continue;
 			}
@@ -544,7 +503,7 @@ export class EditorSimpleWorker implements IRequestHandler, IDisposable {
 
 		for (
 			let iter = model.createWordIterator(wordDefRegExp), e = iter.next();
-			!e.done && suggestions.length <= EditorSimpleWorker._suggestionsLimit;
+			!e.done && suggestions.length <= BaseEditorSimpleWorker._suggestionsLimit;
 			e = iter.next()
 		) {
 			const word = e.value;
@@ -632,15 +591,8 @@ export class EditorSimpleWorker implements IRequestHandler, IDisposable {
 
 	// ---- BEGIN foreign module support --------------------------------------------------------------------------
 
-	public loadForeignModule(moduleId: string, createData: any, foreignHostMethods: string[]): Promise<string[]> {
-		const proxyMethodRequest = (method: string, args: any[]): Promise<any> => {
-			return this._host.fhr(method, args);
-		};
-
-		const foreignHost = types.createProxyObject(foreignHostMethods, proxyMethodRequest);
-
-		let ctx: IWorkerContext<any> = {
-			host: foreignHost,
+	public loadForeignModule(moduleId: string, createData: any): Promise<string[]> {
+		let ctx: IWorkerContext = {
 			getMirrorModels: (): IMirrorModel[] => {
 				return this._getModels();
 			}
@@ -649,14 +601,27 @@ export class EditorSimpleWorker implements IRequestHandler, IDisposable {
 		if (this._foreignModuleFactory) {
 			this._foreignModule = this._foreignModuleFactory(ctx, createData);
 			// static foreing module
-			return Promise.resolve(types.getAllMethodNames(this._foreignModule));
+			let methods: string[] = [];
+			for (const prop of getAllPropertyNames(this._foreignModule)) {
+				if (typeof this._foreignModule[prop] === 'function') {
+					methods.push(prop);
+				}
+			}
+			return Promise.resolve(methods);
 		}
 		// ESM-comment-begin
 		return new Promise<any>((resolve, reject) => {
 			require([moduleId], (foreignModule: { create: IForeignModuleFactory }) => {
 				this._foreignModule = foreignModule.create(ctx, createData);
 
-				resolve(types.getAllMethodNames(this._foreignModule));
+				let methods: string[] = [];
+				for (const prop of getAllPropertyNames(this._foreignModule)) {
+					if (typeof this._foreignModule[prop] === 'function') {
+						methods.push(prop);
+					}
+				}
+
+				resolve(methods);
 
 			}, reject);
 		});
@@ -684,11 +649,58 @@ export class EditorSimpleWorker implements IRequestHandler, IDisposable {
 }
 
 /**
+ * @internal
+ */
+export class EditorSimpleWorkerImpl extends BaseEditorSimpleWorker implements IRequestHandler, IDisposable {
+	_requestHandlerBrand: any;
+
+	private _models: { [uri: string]: MirrorModel; };
+
+	constructor(foreignModuleFactory: IForeignModuleFactory | null) {
+		super(foreignModuleFactory);
+		this._models = Object.create(null);
+	}
+
+	public dispose(): void {
+		this._models = Object.create(null);
+	}
+
+	protected _getModel(uri: string): ICommonModel {
+		return this._models[uri];
+	}
+
+	protected _getModels(): ICommonModel[] {
+		let all: MirrorModel[] = [];
+		Object.keys(this._models).forEach((key) => all.push(this._models[key]));
+		return all;
+	}
+
+	public acceptNewModel(data: IRawModelData): void {
+		this._models[data.url] = new MirrorModel(URI.parse(data.url), data.lines, data.EOL, data.versionId);
+	}
+
+	public acceptModelChanged(strURL: string, e: IModelChangedEvent): void {
+		if (!this._models[strURL]) {
+			return;
+		}
+		let model = this._models[strURL];
+		model.onEvents(e);
+	}
+
+	public acceptRemovedModel(strURL: string): void {
+		if (!this._models[strURL]) {
+			return;
+		}
+		delete this._models[strURL];
+	}
+}
+
+/**
  * Called on the worker side
  * @internal
  */
-export function create(host: EditorWorkerHost): IRequestHandler {
-	return new EditorSimpleWorker(host, null);
+export function create(): IRequestHandler {
+	return new EditorSimpleWorkerImpl(null);
 }
 
 // This is only available in a Web Worker

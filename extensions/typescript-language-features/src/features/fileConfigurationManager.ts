@@ -144,9 +144,7 @@ export default class FileConfigurationManager extends Disposable {
 			isTypeScriptDocument(document) ? 'typescript.format' : 'javascript.format',
 			document.uri);
 
-		// `semicolons` added to `Proto.FormatCodeSettings` in TypeScript 3.7:
-		// remove intersection type after upgrading TypeScript.
-		const settings: Proto.FormatCodeSettings & { semicolons?: string } = {
+		return {
 			tabSize: options.tabSize,
 			indentSize: options.tabSize,
 			convertTabsToSpaces: options.insertSpaces,
@@ -167,10 +165,7 @@ export default class FileConfigurationManager extends Disposable {
 			insertSpaceAfterTypeAssertion: config.get<boolean>('insertSpaceAfterTypeAssertion'),
 			placeOpenBraceOnNewLineForFunctions: config.get<boolean>('placeOpenBraceOnNewLineForFunctions'),
 			placeOpenBraceOnNewLineForControlBlocks: config.get<boolean>('placeOpenBraceOnNewLineForControlBlocks'),
-			semicolons: config.get<string>('semicolons'),
 		};
-
-		return settings;
 	}
 
 	private getPreferences(document: vscode.TextDocument): Proto.UserPreferences {

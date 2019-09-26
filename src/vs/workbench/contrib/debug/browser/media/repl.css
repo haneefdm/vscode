@@ -48,13 +48,11 @@
 	cursor: text;
 }
 
-.repl .repl-tree .output.expression > .value,
-.repl .repl-tree .evaluation-result.expression > .value {
+.repl .repl-tree .output.expression > .value {
 	margin-left: 0px;
 }
 
-.repl .repl-tree .output.expression > .annotation,
-.repl .repl-tree .evaluation-result.expression > .annotation {
+.repl .repl-tree .output.expression > .annotation {
 	font-size: inherit;
 	padding-left: 6px;
 }
@@ -69,7 +67,7 @@
 }
 
 /* Only show 'stale expansion' info when the element gets expanded. */
-.repl .repl-tree .evaluation-result > .annotation::before  {
+.repl .repl-tree .input-output-pair > .output > .annotation::before  {
 	content: '';
 }
 
@@ -86,6 +84,19 @@
 
 .monaco-workbench.linux .repl .repl-input-wrapper:before {
 	font-size: 9px;
+}
+
+/* Actions */
+.debug-action.clear-repl {
+	background: url('clear-light.svg') center center no-repeat;
+}
+
+.vs-dark .debug-action.clear-repl {
+	background: url('clear-dark.svg') center center no-repeat;
+}
+
+.hc-black .debug-action.clear-repl {
+	background: url('clear-hc.svg') center center no-repeat;
 }
 
 /* Output coloring  and styling */
@@ -121,3 +132,9 @@
 .monaco-workbench .repl .repl-tree .output.expression .code-bold	{ font-weight: bold; }
 .monaco-workbench .repl .repl-tree .output.expression .code-italic	{ font-style: italic; }
 .monaco-workbench .repl .repl-tree .output.expression .code-underline { text-decoration: underline; }
+
+/* Links */
+.monaco-workbench .repl .repl-tree .output.expression a {
+	text-decoration: underline;
+	cursor: pointer;
+}

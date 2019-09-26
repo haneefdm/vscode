@@ -4,18 +4,13 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { ISignService } from 'vs/platform/sign/common/sign';
+import { ServiceIdentifier } from 'vs/platform/instantiation/common/instantiation';
 
 export class SignService implements ISignService {
 
-	_serviceBrand: undefined;
-
-	private readonly _tkn: string | null;
-
-	constructor(token: string | undefined) {
-		this._tkn = token || null;
-	}
+	_serviceBrand: ServiceIdentifier<ISignService>;
 
 	async sign(value: string): Promise<string> {
-		return Promise.resolve(this._tkn || '');
+		return Promise.resolve(document.getElementById('vscode-remote-connection-token')!.getAttribute('data-settings')!);
 	}
 }

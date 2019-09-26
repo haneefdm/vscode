@@ -13,17 +13,17 @@ export class FoldingDecorationProvider implements IDecorationProvider {
 	private static COLLAPSED_VISUAL_DECORATION = ModelDecorationOptions.register({
 		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 		afterContentClassName: 'inline-folded',
-		linesDecorationsClassName: 'codicon codicon-chevron-right'
+		linesDecorationsClassName: 'folding collapsed'
 	});
 
 	private static EXPANDED_AUTO_HIDE_VISUAL_DECORATION = ModelDecorationOptions.register({
 		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-		linesDecorationsClassName: 'codicon codicon-chevron-down'
+		linesDecorationsClassName: 'folding'
 	});
 
 	private static EXPANDED_VISUAL_DECORATION = ModelDecorationOptions.register({
 		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-		linesDecorationsClassName: 'codicon codicon-chevron-down alwaysShowFoldIcons'
+		linesDecorationsClassName: 'folding alwaysShowFoldIcons'
 	});
 
 	public autoHideFoldingControls: boolean = true;

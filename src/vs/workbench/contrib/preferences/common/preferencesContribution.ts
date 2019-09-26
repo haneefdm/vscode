@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { dispose, IDisposable, DisposableStore } from 'vs/base/common/lifecycle';
+import { isLinux } from 'vs/base/common/platform';
 import { isEqual } from 'vs/base/common/resources';
 import { endsWith } from 'vs/base/common/strings';
 import { URI } from 'vs/base/common/uri';
@@ -26,7 +27,7 @@ import { FOLDER_SETTINGS_PATH, IPreferencesService, USE_SPLIT_JSON_SETTING } fro
 const schemaRegistry = Registry.as<JSONContributionRegistry.IJSONContributionRegistry>(JSONContributionRegistry.Extensions.JSONContribution);
 
 export class PreferencesContribution implements IWorkbenchContribution {
-	private editorOpeningListener: IDisposable | undefined;
+	private editorOpeningListener: IDisposable;
 	private settingsListener: IDisposable;
 
 	constructor(
@@ -78,7 +79,7 @@ export class PreferencesContribution implements IWorkbenchContribution {
 		}
 
 		// Global User Settings File
-		if (isEqual(resource, this.environmentService.settingsResource)) {
+		if (isEqual(resource, this.environmentService.settingsResource, !isLinux)) {
 			return { override: this.preferencesService.openGlobalSettings(true, options, group) };
 		}
 

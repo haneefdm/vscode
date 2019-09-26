@@ -7,6 +7,9 @@ import { IConfigurationCache, ConfigurationKey } from 'vs/workbench/services/con
 
 export class ConfigurationCache implements IConfigurationCache {
 
+	constructor() {
+	}
+
 	async read(key: ConfigurationKey): Promise<string> {
 		return '';
 	}

@@ -33,8 +33,8 @@ export class Range {
 		this.end = new Position(endLine, endCol);
 	}
 
-	isEmpty = false;
-	isSingleLine = false;
+	isEmpty: boolean;
+	isSingleLine: boolean;
 	contains(positionOrRange: Position | Range): boolean { return false; }
 	isEqual(other: Range): boolean { return false; }
 	intersection(range: Range): Range | undefined { return undefined; }

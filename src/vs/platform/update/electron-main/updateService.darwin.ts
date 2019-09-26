@@ -8,17 +8,17 @@ import { IDisposable, dispose } from 'vs/base/common/lifecycle';
 import { Event } from 'vs/base/common/event';
 import { memoize } from 'vs/base/common/decorators';
 import { IConfigurationService } from 'vs/platform/configuration/common/configuration';
-import { ILifecycleMainService } from 'vs/platform/lifecycle/electron-main/lifecycleMainService';
+import { ILifecycleService } from 'vs/platform/lifecycle/electron-main/lifecycleMain';
 import { State, IUpdate, StateType, UpdateType } from 'vs/platform/update/common/update';
 import { ITelemetryService } from 'vs/platform/telemetry/common/telemetry';
 import { IEnvironmentService } from 'vs/platform/environment/common/environment';
 import { ILogService } from 'vs/platform/log/common/log';
-import { AbstractUpdateService, createUpdateURL, UpdateNotAvailableClassification } from 'vs/platform/update/electron-main/abstractUpdateService';
-import { IRequestService } from 'vs/platform/request/common/request';
+import { AbstractUpdateService, createUpdateURL } from 'vs/platform/update/electron-main/abstractUpdateService';
+import { IRequestService } from 'vs/platform/request/node/request';
 
 export class DarwinUpdateService extends AbstractUpdateService {
 
-	_serviceBrand: undefined;
+	_serviceBrand: any;
 
 	private disposables: IDisposable[] = [];
 
@@ -28,14 +28,14 @@ export class DarwinUpdateService extends AbstractUpdateService {
 	@memoize private get onRawUpdateDownloaded(): Event<IUpdate> { return Event.fromNodeEventEmitter(electron.autoUpdater, 'update-downloaded', (_, releaseNotes, version, date) => ({ releaseNotes, version, productVersion: version, date })); }
 
 	constructor(
-		@ILifecycleMainService lifecycleMainService: ILifecycleMainService,
+		@ILifecycleService lifecycleService: ILifecycleService,
 		@IConfigurationService configurationService: IConfigurationService,
 		@ITelemetryService private readonly telemetryService: ITelemetryService,
 		@IEnvironmentService environmentService: IEnvironmentService,
 		@IRequestService requestService: IRequestService,
 		@ILogService logService: ILogService
 	) {
-		super(lifecycleMainService, configurationService, environmentService, requestService, logService);
+		super(lifecycleService, configurationService, environmentService, requestService, logService);
 		this.onRawError(this.onError, this, this.disposables);
 		this.onRawUpdateAvailable(this.onUpdateAvailable, this, this.disposables);
 		this.onRawUpdateDownloaded(this.onUpdateDownloaded, this, this.disposables);
@@ -81,10 +81,12 @@ export class DarwinUpdateService extends AbstractUpdateService {
 			return;
 		}
 
-		type UpdateDownloadedClassification = {
-			version: { classification: 'SystemMetaData', purpose: 'FeatureInsight' };
-		};
-		this.telemetryService.publicLog2<{ version: String }, UpdateDownloadedClassification>('update:downloaded', { version: update.version });
+		/* __GDPR__
+			"update:downloaded" : {
+				"version" : { "classification": "SystemMetaData", "purpose": "FeatureInsight" }
+			}
+		*/
+		this.telemetryService.publicLog('update:downloaded', { version: update.version });
 
 		this.setState(State.Ready(update));
 	}
@@ -93,7 +95,13 @@ export class DarwinUpdateService extends AbstractUpdateService {
 		if (this.state.type !== StateType.CheckingForUpdates) {
 			return;
 		}
-		this.telemetryService.publicLog2<{ explicit: boolean }, UpdateNotAvailableClassification>('update:notAvailable', { explicit: !!this.state.context });
+
+		/* __GDPR__
+				"update:notAvailable" : {
+					"explicit" : { "classification": "SystemMetaData", "purpose": "FeatureInsight", "isMeasurement": true }
+				}
+			*/
+		this.telemetryService.publicLog('update:notAvailable', { explicit: !!this.state.context });
 
 		this.setState(State.Idle(UpdateType.Archive));
 	}

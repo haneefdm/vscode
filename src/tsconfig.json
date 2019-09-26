@@ -5,18 +5,11 @@
 		"preserveConstEnums": true,
 		"sourceMap": false,
 		"outDir": "../out",
-		"target": "es2017",
+		"target": "es6",
 		"lib": [
 			"dom",
 			"es5",
 			"es2015.iterable"
-		],
-		"types": [
-			"keytar",
-			"mocha",
-			"semver",
-			"sinon",
-			"winreg"
 		]
 	},
 	"include": [
@@ -24,9 +17,6 @@
 		"./vs"
 	],
 	"exclude": [
-		"./typings/require-monaco.d.ts",
-		"./typings/xterm.d.ts",
-		"./typings/xterm-addon-search.d.ts",
-		"./typings/xterm-addon-web-links.d.ts"
+		"./typings/require-monaco.d.ts"
 	]
 }

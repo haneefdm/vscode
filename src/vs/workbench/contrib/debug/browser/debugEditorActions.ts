@@ -9,7 +9,7 @@ import { Range } from 'vs/editor/common/core/range';
 import { EditorContextKeys } from 'vs/editor/common/editorContextKeys';
 import { ServicesAccessor, registerEditorAction, EditorAction, IActionOptions } from 'vs/editor/browser/editorExtensions';
 import { ContextKeyExpr } from 'vs/platform/contextkey/common/contextkey';
-import { IDebugService, CONTEXT_IN_DEBUG_MODE, CONTEXT_DEBUG_STATE, State, REPL_ID, VIEWLET_ID, IDebugEditorContribution, EDITOR_CONTRIBUTION_ID, BreakpointWidgetContext, IBreakpoint, BREAKPOINT_EDITOR_CONTRIBUTION_ID, IBreakpointEditorContribution } from 'vs/workbench/contrib/debug/common/debug';
+import { IDebugService, CONTEXT_IN_DEBUG_MODE, CONTEXT_DEBUG_STATE, State, REPL_ID, VIEWLET_ID, IDebugEditorContribution, EDITOR_CONTRIBUTION_ID, BreakpointWidgetContext, IBreakpoint } from 'vs/workbench/contrib/debug/common/debug';
 import { IPanelService } from 'vs/workbench/services/panel/common/panelService';
 import { IViewletService } from 'vs/workbench/services/viewlet/browser/viewlet';
 import { ICodeEditor } from 'vs/editor/browser/editorBrowser';
@@ -35,23 +35,19 @@ class ToggleBreakpointAction extends EditorAction {
 	}
 
 	public run(accessor: ServicesAccessor, editor: ICodeEditor): Promise<any> {
-		if (editor.hasModel()) {
-			const debugService = accessor.get(IDebugService);
-			const modelUri = editor.getModel().uri;
-			const canSet = debugService.getConfigurationManager().canSetBreakpointsIn(editor.getModel());
-			// Does not account for multi line selections, Set to remove multiple cursor on the same line
-			const lineNumbers = [...new Set(editor.getSelections().map(s => s.getPosition().lineNumber))];
+		const debugService = accessor.get(IDebugService);
 
-			return Promise.all(lineNumbers.map(line => {
-				const bps = debugService.getModel().getBreakpoints({ lineNumber: line, uri: modelUri });
-				if (bps.length) {
-					return Promise.all(bps.map(bp => debugService.removeBreakpoints(bp.getId())));
-				} else if (canSet) {
-					return (debugService.addBreakpoints(modelUri, [{ lineNumber: line }], 'debugEditorActions.toggleBreakpointAction'));
-				} else {
-					return Promise.resolve([]);
-				}
-			}));
+		const position = editor.getPosition();
+		if (editor.hasModel() && position) {
+			const modelUri = editor.getModel().uri;
+			const bps = debugService.getModel().getBreakpoints({ lineNumber: position.lineNumber, uri: modelUri });
+
+			if (bps.length) {
+				return Promise.all(bps.map(bp => debugService.removeBreakpoints(bp.getId())));
+			}
+			if (debugService.getConfigurationManager().canSetBreakpointsIn(editor.getModel())) {
+				return debugService.addBreakpoints(modelUri, [{ lineNumber: position.lineNumber }], 'debugEditorActions.toggleBreakpointAction');
+			}
 		}
 
 		return Promise.resolve();
@@ -75,7 +71,7 @@ class ConditionalBreakpointAction extends EditorAction {
 
 		const position = editor.getPosition();
 		if (position && editor.hasModel() && debugService.getConfigurationManager().canSetBreakpointsIn(editor.getModel())) {
-			editor.getContribution<IBreakpointEditorContribution>(BREAKPOINT_EDITOR_CONTRIBUTION_ID).showBreakpointWidget(position.lineNumber, undefined);
+			editor.getContribution<IDebugEditorContribution>(EDITOR_CONTRIBUTION_ID).showBreakpointWidget(position.lineNumber, position.column);
 		}
 	}
 }
@@ -97,7 +93,7 @@ class LogPointAction extends EditorAction {
 
 		const position = editor.getPosition();
 		if (position && editor.hasModel() && debugService.getConfigurationManager().canSetBreakpointsIn(editor.getModel())) {
-			editor.getContribution<IBreakpointEditorContribution>(BREAKPOINT_EDITOR_CONTRIBUTION_ID).showBreakpointWidget(position.lineNumber, BreakpointWidgetContext.LOG_MESSAGE);
+			editor.getContribution<IDebugEditorContribution>(EDITOR_CONTRIBUTION_ID).showBreakpointWidget(position.lineNumber, position.column, BreakpointWidgetContext.LOG_MESSAGE);
 		}
 	}
 }
@@ -169,7 +165,7 @@ class SelectionToReplAction extends EditorAction {
 		});
 	}
 
-	public async run(accessor: ServicesAccessor, editor: ICodeEditor): Promise<void> {
+	public run(accessor: ServicesAccessor, editor: ICodeEditor): Promise<void> {
 		const debugService = accessor.get(IDebugService);
 		const panelService = accessor.get(IPanelService);
 		const viewModel = debugService.getViewModel();
@@ -179,8 +175,9 @@ class SelectionToReplAction extends EditorAction {
 		}
 
 		const text = editor.getModel().getValueInRange(editor.getSelection());
-		await session.addReplExpression(viewModel.focusedStackFrame!, text);
-		await panelService.openPanel(REPL_ID, true);
+		return session.addReplExpression(viewModel.focusedStackFrame!, text)
+			.then(() => panelService.openPanel(REPL_ID, true))
+			.then(_ => undefined);
 	}
 }
 

@@ -9,12 +9,12 @@ import { isArray, withUndefinedAsNull } from 'vs/base/common/types';
 import { URI } from 'vs/base/common/uri';
 import { localize } from 'vs/nls';
 import { ConfigurationTarget, IConfigurationService } from 'vs/platform/configuration/common/configuration';
+import { ConfigurationScope } from 'vs/platform/configuration/common/configurationRegistry';
 import { SettingsTarget } from 'vs/workbench/contrib/preferences/browser/preferencesWidgets';
 import { ITOCEntry, knownAcronyms, knownTermMappings } from 'vs/workbench/contrib/preferences/browser/settingsLayout';
 import { MODIFIED_SETTING_TAG } from 'vs/workbench/contrib/preferences/common/preferences';
 import { IExtensionSetting, ISearchResult, ISetting, SettingValueType } from 'vs/workbench/services/preferences/common/preferences';
 import { IWorkbenchEnvironmentService } from 'vs/workbench/services/environment/common/environmentService';
-import { FOLDER_SCOPES, WORKSPACE_SCOPES, REMOTE_MACHINE_SCOPES, LOCAL_MACHINE_SCOPES } from 'vs/workbench/services/configuration/common/configuration';
 
 export const ONLINE_SERVICES_SETTING_TAG = 'usesOnlineServices';
 
@@ -33,11 +33,6 @@ export abstract class SettingsTreeElement {
 	 * Index assigned in display order, used for paging.
 	 */
 	index: number;
-
-	constructor(_id: string, _index: number) {
-		this.id = _id;
-		this.index = _index;
-	}
 }
 
 export type SettingsTreeGroupChild = (SettingsTreeGroupElement | SettingsTreeSettingElement | SettingsTreeNewExtensionsElement);
@@ -48,8 +43,8 @@ export class SettingsTreeGroupElement extends SettingsTreeElement {
 	level: number;
 	isFirstGroup: boolean;
 
-	private _childSettingKeys: Set<string> = new Set();
-	private _children: SettingsTreeGroupChild[] = [];
+	private _childSettingKeys: Set<string>;
+	private _children: SettingsTreeGroupChild[];
 
 	get children(): SettingsTreeGroupChild[] {
 		return this._children;
@@ -66,15 +61,6 @@ export class SettingsTreeGroupElement extends SettingsTreeElement {
 		});
 	}
 
-	constructor(_id: string, _index: number, count: number | undefined, label: string, level: number, isFirstGroup: boolean) {
-		super(_id, _index);
-
-		this.count = count;
-		this.label = label;
-		this.level = level;
-		this.isFirstGroup = isFirstGroup;
-	}
-
 	/**
 	 * Returns whether this group contains the given child key (to a depth of 1 only)
 	 */
@@ -84,9 +70,7 @@ export class SettingsTreeGroupElement extends SettingsTreeElement {
 }
 
 export class SettingsTreeNewExtensionsElement extends SettingsTreeElement {
-	constructor(_id: string, _index: number, public readonly extensionIds: string[]) {
-		super(_id, _index);
-	}
+	extensionIds: string[];
 }
 
 export class SettingsTreeSettingElement extends SettingsTreeElement {
@@ -94,8 +78,8 @@ export class SettingsTreeSettingElement extends SettingsTreeElement {
 
 	setting: ISetting;
 
-	private _displayCategory: string | null = null;
-	private _displayLabel: string | null = null;
+	private _displayCategory: string;
+	private _displayLabel: string;
 
 	/**
 	 * scopeValue || defaultValue, for rendering convenience.
@@ -115,17 +99,19 @@ export class SettingsTreeSettingElement extends SettingsTreeElement {
 	/**
 	 * Whether the setting is configured in the selected scope.
 	 */
-	isConfigured = false;
+	isConfigured: boolean;
 
 	tags?: Set<string>;
-	overriddenScopeList: string[] = [];
-	description!: string;
-	valueType!: SettingValueType;
+	overriddenScopeList: string[];
+	description: string;
+	valueType: SettingValueType;
 
 	constructor(setting: ISetting, parent: SettingsTreeGroupElement, index: number, inspectResult: IInspectResult) {
-		super(sanitizeId(parent.id + '_' + setting.key), index);
+		super();
+		this.index = index;
 		this.setting = setting;
 		this.parent = parent;
+		this.id = sanitizeId(parent.id + '_' + setting.key);
 
 		this.update(inspectResult);
 	}
@@ -135,7 +121,7 @@ export class SettingsTreeSettingElement extends SettingsTreeElement {
 			this.initLabel();
 		}
 
-		return this._displayCategory!;
+		return this._displayCategory;
 	}
 
 	get displayLabel(): string {
@@ -143,7 +129,7 @@ export class SettingsTreeSettingElement extends SettingsTreeElement {
 			this.initLabel();
 		}
 
-		return this._displayLabel!;
+		return this._displayLabel;
 	}
 
 	private initLabel(): void {
@@ -207,8 +193,6 @@ export class SettingsTreeSettingElement extends SettingsTreeElement {
 			this.valueType = SettingValueType.Number;
 		} else if (this.setting.type === 'boolean') {
 			this.valueType = SettingValueType.Boolean;
-		} else if (this.setting.type === 'array' && this.setting.arrayItemType === 'string') {
-			this.valueType = SettingValueType.ArrayOfString;
 		} else if (isArray(this.setting.type) && this.setting.type.indexOf(SettingValueType.Null) > -1 && this.setting.type.length === 2) {
 			if (this.setting.type.indexOf(SettingValueType.Integer) > -1) {
 				this.valueType = SettingValueType.NullableInteger;
@@ -241,24 +225,20 @@ export class SettingsTreeSettingElement extends SettingsTreeElement {
 	matchesScope(scope: SettingsTarget, isRemote: boolean): boolean {
 		const configTarget = URI.isUri(scope) ? ConfigurationTarget.WORKSPACE_FOLDER : scope;
 
-		if (!this.setting.scope) {
-			return true;
-		}
-
 		if (configTarget === ConfigurationTarget.WORKSPACE_FOLDER) {
-			return FOLDER_SCOPES.indexOf(this.setting.scope) !== -1;
+			return this.setting.scope === ConfigurationScope.RESOURCE;
 		}
 
 		if (configTarget === ConfigurationTarget.WORKSPACE) {
-			return WORKSPACE_SCOPES.indexOf(this.setting.scope) !== -1;
+			return this.setting.scope === ConfigurationScope.WINDOW || this.setting.scope === ConfigurationScope.RESOURCE;
 		}
 
 		if (configTarget === ConfigurationTarget.USER_REMOTE) {
-			return REMOTE_MACHINE_SCOPES.indexOf(this.setting.scope) !== -1;
+			return this.setting.scope === ConfigurationScope.MACHINE || this.setting.scope === ConfigurationScope.WINDOW || this.setting.scope === ConfigurationScope.RESOURCE;
 		}
 
 		if (configTarget === ConfigurationTarget.USER_LOCAL && isRemote) {
-			return LOCAL_MACHINE_SCOPES.indexOf(this.setting.scope) !== -1;
+			return this.setting.scope !== ConfigurationScope.MACHINE;
 		}
 
 		return true;
@@ -284,10 +264,10 @@ export class SettingsTreeSettingElement extends SettingsTreeElement {
 }
 
 export class SettingsTreeModel {
-	protected _root!: SettingsTreeGroupElement;
+	protected _root: SettingsTreeGroupElement;
 	protected _treeElementsById = new Map<string, SettingsTreeElement>();
 	private _treeElementsBySettingName = new Map<string, SettingsTreeSettingElement[]>();
-	private _tocRoot!: ITOCEntry;
+	private _tocRoot: ITOCEntry;
 
 	constructor(
 		protected _viewState: ISettingsEditorViewState,
@@ -334,10 +314,13 @@ export class SettingsTreeModel {
 	}
 
 	private createSettingsTreeGroupElement(tocEntry: ITOCEntry, parent?: SettingsTreeGroupElement): SettingsTreeGroupElement {
-
+		const element = new SettingsTreeGroupElement();
 		const index = this._treeElementsById.size;
-		const depth = parent ? this.getDepth(parent) + 1 : 0;
-		const element = new SettingsTreeGroupElement(tocEntry.id, index, undefined, tocEntry.label, depth, false);
+		element.index = index;
+		element.id = tocEntry.id;
+		element.label = tocEntry.label;
+		element.parent = parent;
+		element.level = this.getDepth(element);
 
 		const children: SettingsTreeGroupChild[] = [];
 		if (tocEntry.settings) {
@@ -493,9 +476,9 @@ export const enum SearchResultIdx {
 }
 
 export class SearchResultModel extends SettingsTreeModel {
-	private rawSearchResults: ISearchResult[] | null = null;
-	private cachedUniqueSearchResults: ISearchResult[] | null = null;
-	private newExtensionSearchResults: ISearchResult | null = null;
+	private rawSearchResults: ISearchResult[];
+	private cachedUniqueSearchResults: ISearchResult[] | undefined;
+	private newExtensionSearchResults: ISearchResult;
 
 	readonly id = 'searchResultModel';
 
@@ -537,11 +520,11 @@ export class SearchResultModel extends SettingsTreeModel {
 	}
 
 	getRawResults(): ISearchResult[] {
-		return this.rawSearchResults || [];
+		return this.rawSearchResults;
 	}
 
 	setResult(order: SearchResultIdx, result: ISearchResult | null): void {
-		this.cachedUniqueSearchResults = null;
+		this.cachedUniqueSearchResults = undefined;
 		this.rawSearchResults = this.rawSearchResults || [];
 		if (!result) {
 			delete this.rawSearchResults[order];
@@ -565,14 +548,17 @@ export class SearchResultModel extends SettingsTreeModel {
 			.filter(child => child instanceof SettingsTreeSettingElement && child.matchesAllTags(this._viewState.tagFilters) && child.matchesScope(this._viewState.settingsTarget, isRemote) && child.matchesAnyExtension(this._viewState.extensionFilters));
 
 		if (this.newExtensionSearchResults && this.newExtensionSearchResults.filterMatches.length) {
+			const newExtElement = new SettingsTreeNewExtensionsElement();
+			newExtElement.index = this._treeElementsById.size;
+			newExtElement.parent = this._root;
+			newExtElement.id = 'newExtensions';
+			this._treeElementsById.set(newExtElement.id, newExtElement);
+
 			const resultExtensionIds = this.newExtensionSearchResults.filterMatches
 				.map(result => (<IExtensionSetting>result.setting))
 				.filter(setting => setting.extensionName && setting.extensionPublisher)
 				.map(setting => `${setting.extensionPublisher}.${setting.extensionName}`);
-
-			const newExtElement = new SettingsTreeNewExtensionsElement('newExtensions', this._treeElementsById.size, arrays.distinct(resultExtensionIds));
-			newExtElement.parent = this._root;
-			this._treeElementsById.set(newExtElement.id, newExtElement);
+			newExtElement.extensionIds = arrays.distinct(resultExtensionIds);
 			this._root.children.push(newExtElement);
 		}
 	}

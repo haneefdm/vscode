@@ -9,7 +9,7 @@ import { Disposable } from 'vs/base/common/lifecycle';
 import { ILayoutService } from 'vs/platform/layout/browser/layoutService';
 
 export class ContextViewService extends Disposable implements IContextViewService {
-	_serviceBrand: undefined;
+	_serviceBrand: any;
 
 	private contextView: ContextView;
 

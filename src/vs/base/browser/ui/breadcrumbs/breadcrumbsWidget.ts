@@ -57,7 +57,7 @@ export interface IBreadcrumbsItemEvent {
 
 export class BreadcrumbsWidget {
 
-	private readonly _disposables = new DisposableStore();
+	private readonly _disposables = new Array<IDisposable>();
 	private readonly _domNode: HTMLDivElement;
 	private readonly _styleElement: HTMLStyleElement;
 	private readonly _scrollable: DomScrollableElement;
@@ -77,8 +77,8 @@ export class BreadcrumbsWidget {
 	private _focusedItemIdx: number = -1;
 	private _selectedItemIdx: number = -1;
 
-	private _pendingLayout: IDisposable | undefined;
-	private _dimension: dom.Dimension | undefined;
+	private _pendingLayout: IDisposable;
+	private _dimension: dom.Dimension;
 
 	constructor(
 		container: HTMLElement
@@ -94,25 +94,26 @@ export class BreadcrumbsWidget {
 			useShadows: false,
 			scrollYToX: true
 		});
-		this._disposables.add(this._scrollable);
-		this._disposables.add(dom.addStandardDisposableListener(this._domNode, 'click', e => this._onClick(e)));
+		this._disposables.push(this._scrollable);
+		this._disposables.push(dom.addStandardDisposableListener(this._domNode, 'click', e => this._onClick(e)));
 		container.appendChild(this._scrollable.getDomNode());
 
 		this._styleElement = dom.createStyleSheet(this._domNode);
 
-		const focusTracker = dom.trackFocus(this._domNode);
-		this._disposables.add(focusTracker);
-		this._disposables.add(focusTracker.onDidBlur(_ => this._onDidChangeFocus.fire(false)));
-		this._disposables.add(focusTracker.onDidFocus(_ => this._onDidChangeFocus.fire(true)));
+		let focusTracker = dom.trackFocus(this._domNode);
+		this._disposables.push(focusTracker);
+		this._disposables.push(focusTracker.onDidBlur(_ => this._onDidChangeFocus.fire(false)));
+		this._disposables.push(focusTracker.onDidFocus(_ => this._onDidChangeFocus.fire(true)));
 	}
 
 	dispose(): void {
-		this._disposables.dispose();
+		dispose(this._disposables);
 		dispose(this._pendingLayout);
 		this._onDidSelectItem.dispose();
 		this._onDidFocusItem.dispose();
 		this._onDidChangeFocus.dispose();
 		this._domNode.remove();
+		this._disposables.length = 0;
 		this._nodes.length = 0;
 		this._freeNodes.length = 0;
 	}

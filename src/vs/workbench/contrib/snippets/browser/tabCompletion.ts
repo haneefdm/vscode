@@ -19,7 +19,6 @@ import { EditorContextKeys } from 'vs/editor/common/editorContextKeys';
 import { ICodeEditor } from 'vs/editor/browser/editorBrowser';
 import { Snippet } from './snippetsFile';
 import { SnippetCompletion } from './snippetCompletionProvider';
-import { EditorOption } from 'vs/editor/common/config/editorOptions';
 
 export class TabCompletionController implements editorCommon.IEditorContribution {
 
@@ -32,8 +31,8 @@ export class TabCompletionController implements editorCommon.IEditorContribution
 
 	private _hasSnippets: IContextKey<boolean>;
 	private _activeSnippets: Snippet[] = [];
-	private _enabled?: boolean;
-	private _selectionListener?: IDisposable;
+	private _enabled: boolean;
+	private _selectionListener: IDisposable;
 	private readonly _configListener: IDisposable;
 
 	constructor(
@@ -43,7 +42,7 @@ export class TabCompletionController implements editorCommon.IEditorContribution
 	) {
 		this._hasSnippets = TabCompletionController.ContextKey.bindTo(contextKeyService);
 		this._configListener = this._editor.onDidChangeConfiguration(e => {
-			if (e.hasChanged(EditorOption.tabCompletion)) {
+			if (e.contribInfo) {
 				this._update();
 			}
 		});
@@ -60,7 +59,7 @@ export class TabCompletionController implements editorCommon.IEditorContribution
 	}
 
 	private _update(): void {
-		const enabled = this._editor.getOption(EditorOption.tabCompletion) === 'onlySnippets';
+		const enabled = this._editor.getConfiguration().contribInfo.tabCompletion === 'onlySnippets';
 		if (this._enabled !== enabled) {
 			this._enabled = enabled;
 			if (!this._enabled) {
@@ -130,7 +129,7 @@ export class TabCompletionController implements editorCommon.IEditorContribution
 		if (this._activeSnippets.length === 1) {
 			// one -> just insert
 			const [snippet] = this._activeSnippets;
-			SnippetController2.get(this._editor).insert(snippet.codeSnippet, { overwriteBefore: snippet.prefix.length, overwriteAfter: 0 });
+			SnippetController2.get(this._editor).insert(snippet.codeSnippet, snippet.prefix.length, 0);
 
 		} else if (this._activeSnippets.length > 1) {
 			// two or more -> show IntelliSense box

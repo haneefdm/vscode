@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as nls from 'vs/nls';
-import { DisposableStore } from 'vs/base/common/lifecycle';
+import { IDisposable, dispose } from 'vs/base/common/lifecycle';
 import * as strings from 'vs/base/common/strings';
 import { ICodeEditor } from 'vs/editor/browser/editorBrowser';
 import { EditorAction, IActionOptions, ServicesAccessor, registerEditorAction, registerEditorContribution } from 'vs/editor/browser/editorExtensions';
@@ -22,7 +22,6 @@ import { IndentConsts } from 'vs/editor/common/modes/supports/indentRules';
 import { IModelService } from 'vs/editor/common/services/modelService';
 import * as indentUtils from 'vs/editor/contrib/indentation/indentUtils';
 import { IQuickInputService } from 'vs/platform/quickinput/common/quickInput';
-import { EditorOption } from 'vs/editor/common/config/editorOptions';
 
 export function getReindentEditOperations(model: ITextModel, startLineNumber: number, endLineNumber: number, inheritedIndent?: string): IIdentifiedSingleEditOperation[] {
 	if (model.getLineCount() === 1 && model.getLineMaxColumn(1) === 1) {
@@ -379,12 +378,11 @@ export class AutoIndentOnPasteCommand implements ICommand {
 	private readonly _edits: { range: IRange; text: string; eol?: EndOfLineSequence; }[];
 
 	private readonly _initialSelection: Selection;
-	private _selectionId: string | null;
+	private _selectionId: string;
 
 	constructor(edits: TextEdit[], initialSelection: Selection) {
 		this._initialSelection = initialSelection;
 		this._edits = [];
-		this._selectionId = null;
 
 		for (let edit of edits) {
 			if (edit.range && typeof edit.text === 'string') {
@@ -417,7 +415,7 @@ export class AutoIndentOnPasteCommand implements ICommand {
 	}
 
 	public computeCursorState(model: ITextModel, helper: ICursorStateComputerData): Selection {
-		return helper.getTrackedSelection(this._selectionId!);
+		return helper.getTrackedSelection(this._selectionId);
 	}
 }
 
@@ -425,24 +423,26 @@ export class AutoIndentOnPaste implements IEditorContribution {
 	private static readonly ID = 'editor.contrib.autoIndentOnPaste';
 
 	private readonly editor: ICodeEditor;
-	private readonly callOnDispose = new DisposableStore();
-	private readonly callOnModel = new DisposableStore();
+	private callOnDispose: IDisposable[];
+	private callOnModel: IDisposable[];
 
 	constructor(editor: ICodeEditor) {
 		this.editor = editor;
+		this.callOnDispose = [];
+		this.callOnModel = [];
 
-		this.callOnDispose.add(editor.onDidChangeConfiguration(() => this.update()));
-		this.callOnDispose.add(editor.onDidChangeModel(() => this.update()));
-		this.callOnDispose.add(editor.onDidChangeModelLanguage(() => this.update()));
+		this.callOnDispose.push(editor.onDidChangeConfiguration(() => this.update()));
+		this.callOnDispose.push(editor.onDidChangeModel(() => this.update()));
+		this.callOnDispose.push(editor.onDidChangeModelLanguage(() => this.update()));
 	}
 
 	private update(): void {
 
 		// clean up
-		this.callOnModel.clear();
+		this.callOnModel = dispose(this.callOnModel);
 
 		// we are disabled
-		if (!this.editor.getOption(EditorOption.autoIndent) || this.editor.getOption(EditorOption.formatOnPaste)) {
+		if (!this.editor.getConfiguration().autoIndent || this.editor.getConfiguration().contribInfo.formatOnPaste) {
 			return;
 		}
 
@@ -451,7 +451,7 @@ export class AutoIndentOnPaste implements IEditorContribution {
 			return;
 		}
 
-		this.callOnModel.add(this.editor.onDidPaste((range: Range) => {
+		this.callOnModel.push(this.editor.onDidPaste((range: Range) => {
 			this.trigger(range);
 		}));
 	}
@@ -589,13 +589,13 @@ export class AutoIndentOnPaste implements IEditorContribution {
 
 	private shouldIgnoreLine(model: ITextModel, lineNumber: number): boolean {
 		model.forceTokenization(lineNumber);
-		let nonWhitespaceColumn = model.getLineFirstNonWhitespaceColumn(lineNumber);
-		if (nonWhitespaceColumn === 0) {
+		let nonWhiteSpaceColumn = model.getLineFirstNonWhitespaceColumn(lineNumber);
+		if (nonWhiteSpaceColumn === 0) {
 			return true;
 		}
 		let tokens = model.getLineTokens(lineNumber);
 		if (tokens.getCount() > 0) {
-			let firstNonWhitespaceTokenIndex = tokens.findTokenIndexAtOffset(nonWhitespaceColumn);
+			let firstNonWhitespaceTokenIndex = tokens.findTokenIndexAtOffset(nonWhiteSpaceColumn);
 			if (firstNonWhitespaceTokenIndex >= 0 && tokens.getStandardTokenType(firstNonWhitespaceTokenIndex) === StandardTokenType.Comment) {
 				return true;
 			}
@@ -609,8 +609,8 @@ export class AutoIndentOnPaste implements IEditorContribution {
 	}
 
 	public dispose(): void {
-		this.callOnDispose.dispose();
-		this.callOnModel.dispose();
+		this.callOnDispose = dispose(this.callOnDispose);
+		this.callOnModel = dispose(this.callOnModel);
 	}
 }
 
@@ -651,7 +651,7 @@ function getIndentationEditOperations(model: ITextModel, builder: IEditOperation
 
 export class IndentationToSpacesCommand implements ICommand {
 
-	private selectionId: string | null = null;
+	private selectionId: string;
 
 	constructor(private readonly selection: Selection, private tabSize: number) { }
 
@@ -661,13 +661,13 @@ export class IndentationToSpacesCommand implements ICommand {
 	}
 
 	public computeCursorState(model: ITextModel, helper: ICursorStateComputerData): Selection {
-		return helper.getTrackedSelection(this.selectionId!);
+		return helper.getTrackedSelection(this.selectionId);
 	}
 }
 
 export class IndentationToTabsCommand implements ICommand {
 
-	private selectionId: string | null = null;
+	private selectionId: string;
 
 	constructor(private readonly selection: Selection, private tabSize: number) { }
 
@@ -677,7 +677,7 @@ export class IndentationToTabsCommand implements ICommand {
 	}
 
 	public computeCursorState(model: ITextModel, helper: ICursorStateComputerData): Selection {
-		return helper.getTrackedSelection(this.selectionId!);
+		return helper.getTrackedSelection(this.selectionId);
 	}
 }
 

@@ -53,14 +53,16 @@ export interface ColorThemeChangeEvent {
 export class ColorThemeStore {
 
 	private extensionsColorThemes: ColorThemeData[];
+	private readonly onDidChangeEmitter: Emitter<ColorThemeChangeEvent>;
 
-	private readonly onDidChangeEmitter = new Emitter<ColorThemeChangeEvent>();
-	public readonly onDidChange: Event<ColorThemeChangeEvent> = this.onDidChangeEmitter.event;
+	public get onDidChange(): Event<ColorThemeChangeEvent> { return this.onDidChangeEmitter.event; }
 
 	constructor(@IExtensionService private readonly extensionService: IExtensionService, defaultTheme: ColorThemeData) {
 		this.extensionsColorThemes = [defaultTheme];
+		this.onDidChangeEmitter = new Emitter<ColorThemeChangeEvent>();
 		this.initialize();
 	}
+
 
 	private initialize() {
 		themesExtPoint.setHandler((extensions, delta) => {

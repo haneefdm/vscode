@@ -79,10 +79,7 @@ export interface IKeyboardNavigationLabelProvider<T> {
 	 * element always match.
 	 */
 	getKeyboardNavigationLabel(element: T): { toString(): string | undefined; } | undefined;
-}
-
-export interface IKeyboardNavigationDelegate {
-	mightProducePrintableCharacter(event: IKeyboardEvent): boolean;
+	mightProducePrintableCharacter?(event: IKeyboardEvent): boolean;
 }
 
 export const enum ListDragOverEffect {
@@ -107,11 +104,4 @@ export interface IListDragAndDrop<T> {
 	onDragStart?(data: IDragAndDropData, originalEvent: DragEvent): void;
 	onDragOver(data: IDragAndDropData, targetElement: T | undefined, targetIndex: number | undefined, originalEvent: DragEvent): boolean | IListDragOverReaction;
 	drop(data: IDragAndDropData, targetElement: T | undefined, targetIndex: number | undefined, originalEvent: DragEvent): void;
-}
-
-export class ListError extends Error {
-
-	constructor(user: string, message: string) {
-		super(`ListError [${user}] ${message}`);
-	}
 }

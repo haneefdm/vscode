@@ -41,13 +41,13 @@ export class ColorPickerModel {
 		this._onDidChangePresentation.fire(this.presentation);
 	}
 
-	private readonly _onColorFlushed = new Emitter<Color>();
+	private _onColorFlushed = new Emitter<Color>();
 	readonly onColorFlushed: Event<Color> = this._onColorFlushed.event;
 
-	private readonly _onDidChangeColor = new Emitter<Color>();
+	private _onDidChangeColor = new Emitter<Color>();
 	readonly onDidChangeColor: Event<Color> = this._onDidChangeColor.event;
 
-	private readonly _onDidChangePresentation = new Emitter<IColorPresentation>();
+	private _onDidChangePresentation = new Emitter<IColorPresentation>();
 	readonly onDidChangePresentation: Event<IColorPresentation> = this._onDidChangePresentation.event;
 
 	constructor(color: Color, availableColorPresentations: IColorPresentation[], private presentationIndex: number) {

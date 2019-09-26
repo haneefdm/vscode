@@ -81,13 +81,7 @@ export function combinedDisposable(...disposables: IDisposable[]): IDisposable {
 }
 
 export function toDisposable(fn: () => void): IDisposable {
-	const self = trackDisposable({
-		dispose: () => {
-			markTracked(self);
-			fn();
-		}
-	});
-	return self;
+	return trackDisposable({ dispose: fn });
 }
 
 export class DisposableStore implements IDisposable {
@@ -127,7 +121,8 @@ export class DisposableStore implements IDisposable {
 
 		markTracked(t);
 		if (this._isDisposed) {
-			console.warn(new Error('Trying to add a disposable to a DisposableStore that has already been disposed of. The added object will be leaked!').stack);
+			console.warn(new Error('Registering disposable on object that has already been disposed of').stack);
+			t.dispose();
 		} else {
 			this._toDispose.add(t);
 		}
@@ -206,50 +201,15 @@ export class MutableDisposable<T extends IDisposable> implements IDisposable {
 	}
 }
 
-/**
- * Wrapper class that stores a disposable that is not currently "owned" by anyone.
- *
- * Example use cases:
- *
- * - Express that a function/method will take ownership of a disposable parameter.
- * - Express that a function returns a disposable that the caller must explicitly take ownership of.
- */
-export class UnownedDisposable<T extends IDisposable> extends Disposable {
-	private _hasBeenAcquired = false;
-	private _value?: T;
-
-	public constructor(value: T) {
-		super();
-		this._value = value;
-	}
-
-	public acquire(): T {
-		if (this._hasBeenAcquired) {
-			throw new Error('This disposable has already been acquired');
-		}
-		this._hasBeenAcquired = true;
-		const value = this._value!;
-		this._value = undefined;
-		return value;
-	}
-
-	public dispose() {
-		super.dispose();
-		if (!this._hasBeenAcquired) {
-			this._hasBeenAcquired = true;
-			this._value!.dispose();
-			this._value = undefined;
-		}
-	}
-}
-
 export interface IReference<T> extends IDisposable {
 	readonly object: T;
 }
 
 export abstract class ReferenceCollection<T> {
 
-	private readonly references: Map<string, { readonly object: T; counter: number; }> = new Map();
+	private references: Map<string, { readonly object: T; counter: number; }> = new Map();
+
+	constructor() { }
 
 	acquire(key: string): IReference<T> {
 		let reference = this.references.get(key);

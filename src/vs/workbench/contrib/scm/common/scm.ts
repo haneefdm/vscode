@@ -10,6 +10,7 @@ import { createDecorator } from 'vs/platform/instantiation/common/instantiation'
 import { Event } from 'vs/base/common/event';
 import { IDisposable } from 'vs/base/common/lifecycle';
 import { Command } from 'vs/editor/common/modes';
+import { ColorIdentifier } from 'vs/platform/theme/common/colorRegistry';
 import { ISequence } from 'vs/base/common/sequence';
 
 export const VIEWLET_ID = 'workbench.view.scm';
@@ -27,6 +28,10 @@ export interface ISCMResourceDecorations {
 	tooltip?: string;
 	strikeThrough?: boolean;
 	faded?: boolean;
+
+	source?: string;
+	letter?: string;
+	color?: ColorIdentifier;
 }
 
 export interface ISCMResource {
@@ -107,7 +112,7 @@ export interface ISCMRepository extends IDisposable {
 
 export interface ISCMService {
 
-	readonly _serviceBrand: undefined;
+	readonly _serviceBrand: any;
 	readonly onDidAddRepository: Event<ISCMRepository>;
 	readonly onDidRemoveRepository: Event<ISCMRepository>;
 

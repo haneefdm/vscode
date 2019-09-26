@@ -1,34 +1,34 @@
 {
 	"iconDefinitions": {
 		"_root_folder_dark": {
-			"iconPath": "./images/root-folder-dark.svg"
+			"iconPath": "./images/RootFolder_16x_inverse.svg"
 		},
 		"_root_folder_open_dark": {
-			"iconPath": "./images/root-folder-open-dark.svg"
+			"iconPath": "./images/RootFolderOpen_16x_inverse.svg"
 		},
 		"_folder_dark": {
-			"iconPath": "./images/folder-dark.svg"
+			"iconPath": "./images/Folder_16x_inverse.svg"
 		},
 		"_folder_open_dark": {
-			"iconPath": "./images/folder-open-dark.svg"
+			"iconPath": "./images/FolderOpen_16x_inverse.svg"
 		},
 		"_file_dark": {
-			"iconPath": "./images/document-dark.svg"
+			"iconPath": "./images/Document_16x_inverse.svg"
 		},
 		"_root_folder": {
-			"iconPath": "./images/root-folder-light.svg"
+			"iconPath": "./images/RootFolder_16x.svg"
 		},
 		"_root_folder_open": {
-			"iconPath": "./images/root-folder-open-light.svg"
+			"iconPath": "./images/RootFolderOpen_16x.svg"
 		},
 		"_folder_light": {
-			"iconPath": "./images/folder-light.svg"
+			"iconPath": "./images/Folder_16x.svg"
 		},
 		"_folder_open_light": {
-			"iconPath": "./images/folder-open-light.svg"
+			"iconPath": "./images/FolderOpen_16x.svg"
 		},
 		"_file_light": {
-			"iconPath": "./images/document-light.svg"
+			"iconPath": "./images/Document_16x.svg"
 		}
 	},
 

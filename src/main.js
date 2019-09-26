@@ -17,7 +17,7 @@ const paths = require('./paths');
 // @ts-ignore
 const product = require('../product.json');
 // @ts-ignore
-const { app, protocol } = require('electron');
+const app = require('electron').app;
 
 // Enable portable support
 const portable = bootstrap.configurePortable();
@@ -32,11 +32,6 @@ app.setPath('userData', userDataPath);
 
 // Update cwd based on environment and platform
 setCurrentWorkingDirectory();
-
-// Register custom schemes with privileges
-protocol.registerSchemesAsPrivileged([
-	{ scheme: 'vscode-resource', privileges: { secure: true, supportFetchAPI: true, corsEnabled: true } }
-]);
 
 // Global app listeners
 registerListeners();
@@ -107,7 +102,7 @@ function onReady() {
 				});
 			};
 
-			// We received a valid nlsConfig from a user defined locale
+			// We recevied a valid nlsConfig from a user defined locale
 			if (nlsConfig) {
 				startup(nlsConfig);
 			}
@@ -138,7 +133,7 @@ function onReady() {
 }
 
 /**
- * @typedef	 {{ [arg: string]: any; '--'?: string[]; _: string[]; }} ParsedArgs
+ * @typedef {import('minimist').ParsedArgs} ParsedArgs
  *
  * @param {ParsedArgs} cliArgs
  */
@@ -151,6 +146,11 @@ function configureCommandlineSwitches(cliArgs) {
 	const jsFlags = getJSFlags(cliArgs);
 	if (jsFlags) {
 		app.commandLine.appendSwitch('--js-flags', jsFlags);
+	}
+
+	// Disable smooth scrolling for Webviews
+	if (cliArgs['disable-smooth-scrolling']) {
+		app.commandLine.appendSwitch('disable-smooth-scrolling');
 	}
 }
 
@@ -191,7 +191,7 @@ function getUserDataPath(cliArgs) {
  * @returns {ParsedArgs}
  */
 function parseCLIArgs() {
-	const minimist = require('vscode-minimist');
+	const minimist = require('minimist');
 
 	return minimist(process.argv, {
 		string: [

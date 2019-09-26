@@ -35,10 +35,10 @@ import { IInstantiationService } from 'vs/platform/instantiation/common/instanti
 import { IDragAndDropData, DataTransfers } from 'vs/base/browser/dnd';
 import { Schemas } from 'vs/base/common/network';
 import { DesktopDragAndDropData, ExternalElementsDragAndDropData, ElementsDragAndDropData } from 'vs/base/browser/ui/list/listView';
-import { isMacintosh } from 'vs/base/common/platform';
+import { isMacintosh, isLinux } from 'vs/base/common/platform';
 import { IDialogService, IConfirmationResult, IConfirmation, getConfirmMessage } from 'vs/platform/dialogs/common/dialogs';
 import { ITextFileService, ITextFileOperationResult } from 'vs/workbench/services/textfile/common/textfiles';
-import { IHostService } from 'vs/workbench/services/host/browser/host';
+import { IWindowService } from 'vs/platform/windows/common/windows';
 import { IWorkspaceEditingService } from 'vs/workbench/services/workspace/common/workspaceEditing';
 import { URI } from 'vs/base/common/uri';
 import { ITask, sequence } from 'vs/base/common/async';
@@ -46,11 +46,10 @@ import { IEditorService } from 'vs/workbench/services/editor/common/editorServic
 import { IWorkspaceFolderCreationData } from 'vs/platform/workspaces/common/workspaces';
 import { findValidPasteFileTarget } from 'vs/workbench/contrib/files/browser/fileActions';
 import { FuzzyScore, createMatches } from 'vs/base/common/filters';
-import { Emitter } from 'vs/base/common/event';
 
 export class ExplorerDelegate implements IListVirtualDelegate<ExplorerItem> {
 
-	static readonly ITEM_HEIGHT = 22;
+	private static readonly ITEM_HEIGHT = 22;
 
 	getHeight(element: ExplorerItem): number {
 		return ExplorerDelegate.ITEM_HEIGHT;
@@ -61,7 +60,6 @@ export class ExplorerDelegate implements IListVirtualDelegate<ExplorerItem> {
 	}
 }
 
-export const explorerRootErrorEmitter = new Emitter<URI>();
 export class ExplorerDataSource implements IAsyncDataSource<ExplorerItem | ExplorerItem[], ExplorerItem> {
 
 	constructor(
@@ -89,9 +87,8 @@ export class ExplorerDataSource implements IAsyncDataSource<ExplorerItem | Explo
 					// Single folder create a dummy explorer item to show error
 					const placeholder = new ExplorerItem(element.resource, undefined, false);
 					placeholder.isError = true;
+
 					return [placeholder];
-				} else {
-					explorerRootErrorEmitter.fire(element.resource);
 				}
 			} else {
 				// Do not show error for roots since we already use an explorer decoration to notify user
@@ -170,11 +167,7 @@ export class FilesRenderer implements ITreeRenderer<ExplorerItem, FuzzyScore, IF
 			});
 
 			templateData.elementDisposable = templateData.label.onDidRender(() => {
-				try {
-					this.updateWidth(stat);
-				} catch (e) {
-					// noop since the element might no longer be in the tree, no update of width necessery
-				}
+				this.updateWidth(stat);
 			});
 		}
 
@@ -225,17 +218,29 @@ export class FilesRenderer implements ITreeRenderer<ExplorerItem, FuzzyScore, IF
 		const lastDot = value.lastIndexOf('.');
 
 		inputBox.value = value;
-		inputBox.focus();
-		inputBox.select({ start: 0, end: lastDot > 0 && !stat.isDirectory ? lastDot : value.length });
 
-		const done = once((success: boolean, finishEditing: boolean) => {
+		let isFinishableDisposeEvent = false;
+		setTimeout(() => {
+			// Check if disposed
+			if (!inputBox.inputElement) {
+				return;
+			}
+			inputBox.focus();
+			inputBox.select({ start: 0, end: lastDot > 0 && !stat.isDirectory ? lastDot : value.length });
+			isFinishableDisposeEvent = true;
+		}, 0);
+
+		const done = once(async (success: boolean) => {
 			label.element.style.display = 'none';
 			const value = inputBox.value;
 			dispose(toDispose);
 			label.element.remove();
-			if (finishEditing) {
-				editableData.onFinish(value, success);
-			}
+			// Timeout: once done rendering only then re-render #70902
+			setTimeout(() => editableData.onFinish(value, success), 0);
+		});
+
+		const blurDisposable = DOM.addDisposableListener(inputBox.inputElement, DOM.EventType.BLUR, () => {
+			done(inputBox.isInputValid());
 		});
 
 		const toDispose = [
@@ -243,21 +248,25 @@ export class FilesRenderer implements ITreeRenderer<ExplorerItem, FuzzyScore, IF
 			DOM.addStandardDisposableListener(inputBox.inputElement, DOM.EventType.KEY_DOWN, (e: IKeyboardEvent) => {
 				if (e.equals(KeyCode.Enter)) {
 					if (inputBox.validate()) {
-						done(true, true);
+						done(true);
 					}
 				} else if (e.equals(KeyCode.Escape)) {
-					done(false, true);
+					done(false);
 				}
 			}),
-			DOM.addDisposableListener(inputBox.inputElement, DOM.EventType.BLUR, () => {
-				done(inputBox.isInputValid(), true);
-			}),
+			blurDisposable,
 			label,
 			styler
 		];
 
 		return toDisposable(() => {
-			done(false, false);
+			if (isFinishableDisposeEvent) {
+				done(false);
+			}
+			else {
+				dispose(toDispose);
+				label.element.remove();
+			}
 		});
 	}
 
@@ -431,7 +440,7 @@ export class FileDragAndDrop implements ITreeDragAndDrop<ExplorerItem> {
 	private static readonly CONFIRM_DND_SETTING_KEY = 'explorer.confirmDragAndDrop';
 
 	private toDispose: IDisposable[];
-	private dropEnabled = false;
+	private dropEnabled: boolean;
 
 	constructor(
 		@INotificationService private notificationService: INotificationService,
@@ -443,7 +452,7 @@ export class FileDragAndDrop implements ITreeDragAndDrop<ExplorerItem> {
 		@IConfigurationService private configurationService: IConfigurationService,
 		@IInstantiationService private instantiationService: IInstantiationService,
 		@ITextFileService private textFileService: ITextFileService,
-		@IHostService private hostService: IHostService,
+		@IWindowService private windowService: IWindowService,
 		@IWorkspaceEditingService private workspaceEditingService: IWorkspaceEditingService
 	) {
 		this.toDispose = [];
@@ -518,7 +527,7 @@ export class FileDragAndDrop implements ITreeDragAndDrop<ExplorerItem> {
 					return true; // Can not move a file to the same parent unless we copy
 				}
 
-				if (isEqualOrParent(target.resource, source.resource)) {
+				if (isEqualOrParent(target.resource, source.resource, !isLinux /* ignorecase */)) {
 					return true; // Can not move a parent folder into one of its children
 				}
 
@@ -604,13 +613,14 @@ export class FileDragAndDrop implements ITreeDragAndDrop<ExplorerItem> {
 		}
 	}
 
+
 	private async handleExternalDrop(data: DesktopDragAndDropData, target: ExplorerItem, originalEvent: DragEvent): Promise<void> {
 		const droppedResources = extractResources(originalEvent, true);
 		// Check for dropped external files to be folders
 		const result = await this.fileService.resolveAll(droppedResources);
 
 		// Pass focus to window
-		this.hostService.focus();
+		this.windowService.focusWindow();
 
 		// Handle folders by adding to workspace if we are in workspace context
 		const folders = result.filter(r => r.success && r.stat && r.stat.isDirectory).map(result => ({ uri: result.stat!.resource }));
@@ -629,7 +639,7 @@ export class FileDragAndDrop implements ITreeDragAndDrop<ExplorerItem> {
 					: localize('dropFolder', "Do you want to copy '{0}' or add '{0}' as a folder to the workspace?", basename(folders[0].uri));
 			}
 
-			const { choice } = await this.dialogService.show(Severity.Info, message, buttons);
+			const choice = await this.dialogService.show(Severity.Info, message, buttons);
 			if (choice === buttons.length - 3) {
 				return this.workspaceEditingService.addFolders(folders);
 			}
@@ -657,9 +667,8 @@ export class FileDragAndDrop implements ITreeDragAndDrop<ExplorerItem> {
 				// Check for name collisions
 				const targetNames = new Set<string>();
 				if (targetStat.children) {
-					const ignoreCase = hasToIgnoreCase(target.resource);
 					targetStat.children.forEach(child => {
-						targetNames.add(ignoreCase ? child.name : child.name.toLowerCase());
+						targetNames.add(isLinux ? child.name : child.name.toLowerCase());
 					});
 				}
 
@@ -798,8 +807,8 @@ export class FileDragAndDrop implements ITreeDragAndDrop<ExplorerItem> {
 	private doHandleExplorerDrop(source: ExplorerItem, target: ExplorerItem, isCopy: boolean): Promise<void> {
 		// Reuse duplicate action if user copies
 		if (isCopy) {
-			const incrementalNaming = this.configurationService.getValue<IFilesConfiguration>().explorer.incrementalNaming;
-			return this.fileService.copy(source.resource, findValidPasteFileTarget(target, { resource: source.resource, isDirectory: source.isDirectory, allowOverwrite: false }, incrementalNaming)).then(stat => {
+
+			return this.fileService.copy(source.resource, findValidPasteFileTarget(target, { resource: source.resource, isDirectory: source.isDirectory, allowOverwirte: false })).then(stat => {
 				if (!stat.isDirectory) {
 					return this.editorService.openEditor({ resource: stat.resource, options: { pinned: true } }).then(() => undefined);
 				}

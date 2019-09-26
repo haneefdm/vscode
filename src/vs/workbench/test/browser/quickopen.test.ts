@@ -11,7 +11,7 @@ import { Registry } from 'vs/platform/registry/common/platform';
 import { QuickOpenHandlerDescriptor, IQuickOpenRegistry, Extensions as QuickOpenExtensions, QuickOpenAction, QuickOpenHandler } from 'vs/workbench/browser/quickopen';
 
 export class TestQuickOpenService implements IQuickOpenService {
-	public _serviceBrand: undefined;
+	public _serviceBrand: any;
 
 	private callback?: (prefix?: string) => void;
 

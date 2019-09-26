@@ -12,7 +12,11 @@ import { IConfigurationService } from 'vs/platform/configuration/common/configur
 import { registerSingleton } from 'vs/platform/instantiation/common/extensions';
 
 export class NodeDebugHelperService implements IDebugHelperService {
-	_serviceBrand: undefined;
+	_serviceBrand: any;
+
+	constructor(
+	) {
+	}
 
 	createTelemetryService(configurationService: IConfigurationService, args: string[]): TelemetryService | undefined {
 

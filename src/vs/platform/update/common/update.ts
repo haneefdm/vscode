@@ -9,6 +9,8 @@ import { createDecorator } from 'vs/platform/instantiation/common/instantiation'
 export interface IUpdate {
 	version: string;
 	productVersion: string;
+	date?: Date;
+	releaseNotes?: string;
 	supportsFastUpdate?: boolean;
 	url?: string;
 	hash?: string;
@@ -81,7 +83,7 @@ export interface IAutoUpdater extends Event.NodeEventEmitter {
 export const IUpdateService = createDecorator<IUpdateService>('updateService');
 
 export interface IUpdateService {
-	_serviceBrand: undefined;
+	_serviceBrand: any;
 
 	readonly onStateChange: Event<State>;
 	readonly state: State;

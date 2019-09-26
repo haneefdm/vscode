@@ -6,7 +6,7 @@
 import {
 	createConnection, IConnection,
 	TextDocuments, TextDocument, InitializeParams, InitializeResult, NotificationType, RequestType,
-	DocumentRangeFormattingRequest, Disposable, ServerCapabilities, Diagnostic
+	DocumentRangeFormattingRequest, Disposable, ServerCapabilities, Diagnostic, TextDocumentSyncKind
 } from 'vscode-languageserver';
 
 import { xhr, XHRResponse, configure as configureHttpRequests, getErrorStatusDescription } from 'request-light';
@@ -14,7 +14,7 @@ import * as fs from 'fs';
 import { URI } from 'vscode-uri';
 import * as URL from 'url';
 import { formatError, runSafe, runSafeAsync } from './utils/runner';
-import { JSONDocument, JSONSchema, getLanguageService, DocumentLanguageSettings, SchemaConfiguration, ClientCapabilities } from 'vscode-json-languageservice';
+import { JSONDocument, JSONSchema, getLanguageService, DocumentLanguageSettings, SchemaConfiguration } from 'vscode-json-languageservice';
 import { getLanguageModelCache } from './languageModelCache';
 
 interface ISchemaAssociations {
@@ -103,11 +103,10 @@ function getSchemaRequestService(handledSchemas: { [schema: string]: boolean }) 
 let languageService = getLanguageService({
 	workspaceContext,
 	contributions: [],
-	clientCapabilities: ClientCapabilities.LATEST
 });
 
 // Create a text document manager.
-const documents: TextDocuments = new TextDocuments();
+const documents: TextDocuments = new TextDocuments(TextDocumentSyncKind.Incremental);
 
 // Make the text document manager listen on the connection
 // for open, change and close text document events
@@ -155,8 +154,7 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
 		documentSymbolProvider: true,
 		documentRangeFormattingProvider: false,
 		colorProvider: {},
-		foldingRangeProvider: true,
-		selectionRangeProvider: true
+		foldingRangeProvider: true
 	};
 
 	return { capabilities };
@@ -312,7 +310,7 @@ function validateTextDocument(textDocument: TextDocument, callback?: (diagnostic
 	const jsonDocument = getJSONDocument(textDocument);
 	const version = textDocument.version;
 
-	const documentSettings: DocumentLanguageSettings = textDocument.languageId === 'jsonc' ? { comments: 'ignore', trailingCommas: 'warning' } : { comments: 'error', trailingCommas: 'error' };
+	const documentSettings: DocumentLanguageSettings = textDocument.languageId === 'jsonc' ? { comments: 'ignore', trailingCommas: 'ignore' } : { comments: 'error', trailingCommas: 'error' };
 	languageService.doValidation(textDocument, jsonDocument, documentSettings).then(diagnostics => {
 		setTimeout(() => {
 			const currDocument = documents.get(textDocument.uri);
@@ -435,8 +433,7 @@ connection.onFoldingRanges((params, token) => {
 	}, null, `Error while computing folding ranges for ${params.textDocument.uri}`, token);
 });
 
-
-connection.onSelectionRanges((params, token) => {
+connection.onRequest('$/textDocument/selectionRanges', async (params, token) => {
 	return runSafe(() => {
 		const document = documents.get(params.textDocument.uri);
 		if (document) {

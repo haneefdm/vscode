@@ -28,7 +28,7 @@ import { registerSingleton } from 'vs/platform/instantiation/common/extensions';
 
 export class ContextMenuService extends Disposable implements IContextMenuService {
 
-	_serviceBrand: undefined;
+	_serviceBrand: any;
 
 	get onDidContextMenu(): Event<void> { return this.impl.onDidContextMenu; }
 
@@ -63,10 +63,10 @@ export class ContextMenuService extends Disposable implements IContextMenuServic
 
 class NativeContextMenuService extends Disposable implements IContextMenuService {
 
-	_serviceBrand: undefined;
+	_serviceBrand: any;
 
 	private _onDidContextMenu = this._register(new Emitter<void>());
-	readonly onDidContextMenu: Event<void> = this._onDidContextMenu.event;
+	get onDidContextMenu(): Event<void> { return this._onDidContextMenu.event; }
 
 	constructor(
 		@INotificationService private readonly notificationService: INotificationService,

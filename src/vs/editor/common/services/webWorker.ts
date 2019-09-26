@@ -6,7 +6,6 @@
 import { URI } from 'vs/base/common/uri';
 import { EditorWorkerClient } from 'vs/editor/common/services/editorWorkerServiceImpl';
 import { IModelService } from 'vs/editor/common/services/modelService';
-import * as types from 'vs/base/common/types';
 
 /**
  * Create a new web worker that has model syncing capabilities built in.
@@ -49,16 +48,11 @@ export interface IWebWorkerOptions {
 	 * A label to be used to identify the web worker for debugging purposes.
 	 */
 	label?: string;
-	/**
-	 * An object that can be used by the web worker to make calls back to the main thread.
-	 */
-	host?: any;
 }
 
 class MonacoWebWorkerImpl<T> extends EditorWorkerClient implements MonacoWebWorker<T> {
 
 	private readonly _foreignModuleId: string;
-	private readonly _foreignModuleHost: { [method: string]: Function } | null;
 	private _foreignModuleCreateData: any | null;
 	private _foreignProxy: Promise<T> | null;
 
@@ -66,28 +60,13 @@ class MonacoWebWorkerImpl<T> extends EditorWorkerClient implements MonacoWebWork
 		super(modelService, opts.label);
 		this._foreignModuleId = opts.moduleId;
 		this._foreignModuleCreateData = opts.createData || null;
-		this._foreignModuleHost = opts.host || null;
 		this._foreignProxy = null;
-	}
-
-	// foreign host request
-	public fhr(method: string, args: any[]): Promise<any> {
-		if (!this._foreignModuleHost || typeof this._foreignModuleHost[method] !== 'function') {
-			return Promise.reject(new Error('Missing method ' + method + ' or missing main thread foreign host.'));
-		}
-
-		try {
-			return Promise.resolve(this._foreignModuleHost[method].apply(this._foreignModuleHost, args));
-		} catch (e) {
-			return Promise.reject(e);
-		}
 	}
 
 	private _getForeignProxy(): Promise<T> {
 		if (!this._foreignProxy) {
 			this._foreignProxy = this._getProxy().then((proxy) => {
-				const foreignHostMethods = this._foreignModuleHost ? types.getAllMethodNames(this._foreignModuleHost) : [];
-				return proxy.loadForeignModule(this._foreignModuleId, this._foreignModuleCreateData, foreignHostMethods).then((foreignMethods) => {
+				return proxy.loadForeignModule(this._foreignModuleId, this._foreignModuleCreateData).then((foreignMethods) => {
 					this._foreignModuleCreateData = null;
 
 					const proxyMethodRequest = (method: string, args: any[]): Promise<any> => {

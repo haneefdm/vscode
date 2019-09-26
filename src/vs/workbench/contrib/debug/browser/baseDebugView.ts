@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as dom from 'vs/base/browser/dom';
-import { IExpression, IDebugService, IExpressionContainer } from 'vs/workbench/contrib/debug/common/debug';
+import { IExpression, IDebugService } from 'vs/workbench/contrib/debug/common/debug';
 import { Expression, Variable, ExpressionContainer } from 'vs/workbench/contrib/debug/common/debugModel';
 import { IContextViewService } from 'vs/platform/contextview/browser/contextView';
 import { IInputValidationOptions, InputBox } from 'vs/base/browser/ui/inputbox/inputBox';
@@ -16,7 +16,6 @@ import { KeyCode } from 'vs/base/common/keyCodes';
 import { IKeyboardEvent } from 'vs/base/browser/keyboardEvent';
 import { HighlightedLabel, IHighlight } from 'vs/base/browser/ui/highlightedlabel/highlightedLabel';
 import { FuzzyScore, createMatches } from 'vs/base/common/filters';
-import { LinkDetector } from 'vs/workbench/contrib/debug/browser/linkDetector';
 
 export const MAX_VALUE_RENDER_LENGTH_IN_VIEWLET = 1024;
 export const twistiePixels = 20;
@@ -30,7 +29,6 @@ export interface IRenderValueOptions {
 	maxValueLength?: number;
 	showHover?: boolean;
 	colorize?: boolean;
-	linkDetector?: LinkDetector;
 }
 
 export interface IVariableTemplateData {
@@ -52,7 +50,7 @@ export function replaceWhitespace(value: string): string {
 	return value.replace(/[\n\r\t]/g, char => map[char]);
 }
 
-export function renderExpressionValue(expressionOrValue: IExpressionContainer | string, container: HTMLElement, options: IRenderValueOptions): void {
+export function renderExpressionValue(expressionOrValue: IExpression | string, container: HTMLElement, options: IRenderValueOptions): void {
 	let value = typeof expressionOrValue === 'string' ? expressionOrValue : expressionOrValue.value;
 
 	// remove stale classes
@@ -85,23 +83,16 @@ export function renderExpressionValue(expressionOrValue: IExpressionContainer | 
 		value = value.substr(0, options.maxValueLength) + '...';
 	}
 	if (value && !options.preserveWhitespace) {
-		value = replaceWhitespace(value);
+		container.textContent = replaceWhitespace(value);
 	} else {
-		value = value || '';
-	}
-	if (options.linkDetector) {
-		container.textContent = '';
-		const session = (expressionOrValue instanceof ExpressionContainer) ? expressionOrValue.getSession() : undefined;
-		container.appendChild(options.linkDetector.linkify(value, false, session ? session.root : undefined));
-	} else {
-		container.textContent = value;
+		container.textContent = value || '';
 	}
 	if (options.showHover) {
 		container.title = value || '';
 	}
 }
 
-export function renderVariable(variable: Variable, data: IVariableTemplateData, showChanged: boolean, highlights: IHighlight[], linkDetector?: LinkDetector): void {
+export function renderVariable(variable: Variable, data: IVariableTemplateData, showChanged: boolean, highlights: IHighlight[]): void {
 	if (variable.available) {
 		let text = replaceWhitespace(variable.name);
 		if (variable.value && typeof variable.name === 'string') {
@@ -118,8 +109,7 @@ export function renderVariable(variable: Variable, data: IVariableTemplateData, 
 		maxValueLength: MAX_VALUE_RENDER_LENGTH_IN_VIEWLET,
 		preserveWhitespace: false,
 		showHover: true,
-		colorize: true,
-		linkDetector
+		colorize: true
 	});
 }
 
@@ -136,7 +126,7 @@ export interface IExpressionTemplateData {
 	name: HTMLSpanElement;
 	value: HTMLSpanElement;
 	inputBoxContainer: HTMLElement;
-	enableInputBox(options: IInputBoxOptions): void;
+	enableInputBox(expression: IExpression, options: IInputBoxOptions): void;
 	toDispose: IDisposable[];
 	label: HighlightedLabel;
 }
@@ -160,12 +150,15 @@ export abstract class AbstractExpressionsRenderer implements ITreeRenderer<IExpr
 		const inputBoxContainer = dom.append(expression, $('.inputBoxContainer'));
 		const toDispose: IDisposable[] = [];
 
-		const enableInputBox = (options: IInputBoxOptions) => {
+		const enableInputBox = (expression: IExpression, options: IInputBoxOptions) => {
 			name.style.display = 'none';
 			value.style.display = 'none';
 			inputBoxContainer.style.display = 'initial';
 
-			const inputBox = new InputBox(inputBoxContainer, this.contextViewService, options);
+			const inputBox = new InputBox(inputBoxContainer, this.contextViewService, {
+				placeholder: options.placeholder,
+				ariaLabel: options.ariaLabel
+			});
 			const styler = attachInputBoxStyler(inputBox, this.themeService);
 
 			inputBox.value = replaceWhitespace(options.initialValue);
@@ -215,18 +208,15 @@ export abstract class AbstractExpressionsRenderer implements ITreeRenderer<IExpr
 
 	renderElement(node: ITreeNode<IExpression, FuzzyScore>, index: number, data: IExpressionTemplateData): void {
 		const { element } = node;
-		if (element === this.debugService.getViewModel().getSelectedExpression() || (element instanceof Variable && element.errorMessage)) {
-			const options = this.getInputBoxOptions(element);
-			if (options) {
-				data.enableInputBox(options);
-				return;
-			}
+		if (element === this.debugService.getViewModel().getSelectedExpression()) {
+			data.enableInputBox(element, this.getInputBoxOptions(element));
+		} else {
+			this.renderExpression(element, data, createMatches(node.filterData));
 		}
-		this.renderExpression(element, data, createMatches(node.filterData));
 	}
 
 	protected abstract renderExpression(expression: IExpression, data: IExpressionTemplateData, highlights: IHighlight[]): void;
-	protected abstract getInputBoxOptions(expression: IExpression): IInputBoxOptions | undefined;
+	protected abstract getInputBoxOptions(expression: IExpression): IInputBoxOptions;
 
 	disposeTemplate(templateData: IExpressionTemplateData): void {
 		dispose(templateData.toDispose);

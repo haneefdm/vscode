@@ -6,14 +6,14 @@
 import { IKeyboardEvent } from 'vs/base/browser/keyboardEvent';
 import { IMouseEvent, IMouseWheelEvent } from 'vs/base/browser/mouseEvent';
 import { IDisposable } from 'vs/base/common/lifecycle';
-import { OverviewRulerPosition, ConfigurationChangedEvent, EditorLayoutInfo, IComputedEditorOptions, EditorOption, FindComputedEditorOptionValueById, IEditorOptions } from 'vs/editor/common/config/editorOptions';
+import * as editorOptions from 'vs/editor/common/config/editorOptions';
 import { ICursors } from 'vs/editor/common/controller/cursorCommon';
 import { ICursorPositionChangedEvent, ICursorSelectionChangedEvent } from 'vs/editor/common/controller/cursorEvents';
 import { IPosition, Position } from 'vs/editor/common/core/position';
 import { IRange, Range } from 'vs/editor/common/core/range';
 import { Selection } from 'vs/editor/common/core/selection';
 import * as editorCommon from 'vs/editor/common/editorCommon';
-import { IIdentifiedSingleEditOperation, IModelDecoration, IModelDeltaDecoration, ITextModel, ICursorStateComputer } from 'vs/editor/common/model';
+import { IIdentifiedSingleEditOperation, IModelDecoration, IModelDeltaDecoration, ITextModel } from 'vs/editor/common/model';
 import { IModelContentChangedEvent, IModelDecorationsChangedEvent, IModelLanguageChangedEvent, IModelLanguageConfigurationChangedEvent, IModelOptionsChangedEvent } from 'vs/editor/common/model/textModelEvents';
 import { OverviewRulerZone } from 'vs/editor/common/view/overviewZoneManager';
 import { IEditorWhitespace } from 'vs/editor/common/viewLayout/whitespaceComputer';
@@ -83,17 +83,17 @@ export interface IViewZoneChangeAccessor {
 	 * @param zone Zone to create
 	 * @return A unique identifier to the view zone.
 	 */
-	addZone(zone: IViewZone): string;
+	addZone(zone: IViewZone): number;
 	/**
 	 * Remove a zone
 	 * @param id A unique identifier to the view zone, as returned by the `addZone` call.
 	 */
-	removeZone(id: string): void;
+	removeZone(id: number): void;
 	/**
 	 * Change a zone's position.
 	 * The editor will rescan the `afterLineNumber` and `afterColumn` properties of a view zone.
 	 */
-	layoutZone(id: string): void;
+	layoutZone(id: number): void;
 }
 
 /**
@@ -315,7 +315,7 @@ export interface IOverviewRuler {
 	getDomNode(): HTMLElement;
 	dispose(): void;
 	setZones(zones: OverviewRulerZone[]): void;
-	setLayout(position: OverviewRulerPosition): void;
+	setLayout(position: editorOptions.OverviewRulerPosition): void;
 }
 
 /**
@@ -351,7 +351,7 @@ export interface ICodeEditor extends editorCommon.IEditor {
 	 * An event emitted when the configuration of the editor has changed. (e.g. `editor.updateOptions()`)
 	 * @event
 	 */
-	onDidChangeConfiguration(listener: (e: ConfigurationChangedEvent) => void): IDisposable;
+	onDidChangeConfiguration(listener: (e: editorOptions.IConfigurationChangedEvent) => void): IDisposable;
 	/**
 	 * An event emitted when the cursor position has changed.
 	 * @event
@@ -399,7 +399,7 @@ export interface ICodeEditor extends editorCommon.IEditor {
 	 */
 	onWillType(listener: (text: string) => void): IDisposable;
 	/**
-	 * An event emitted after interpreting typed characters (on the keyboard).
+	 * An event emitted before interpreting typed characters (on the keyboard).
 	 * @event
 	 * @internal
 	 */
@@ -481,7 +481,7 @@ export interface ICodeEditor extends editorCommon.IEditor {
 	 * An event emitted when the layout of the editor has changed.
 	 * @event
 	 */
-	onDidLayoutChange(listener: (e: EditorLayoutInfo) => void): IDisposable;
+	onDidLayoutChange(listener: (e: editorOptions.EditorLayoutInfo) => void): IDisposable;
 	/**
 	 * An event emitted when the scroll in the editor has changed.
 	 * @event
@@ -532,19 +532,15 @@ export interface ICodeEditor extends editorCommon.IEditor {
 	setModel(model: ITextModel | null): void;
 
 	/**
-	 * @internal
+	 * Returns the current editor's configuration
 	 */
-	getOptions(): IComputedEditorOptions;
+	getConfiguration(): editorOptions.InternalEditorOptions;
 
 	/**
+	 * Returns the 'raw' editor's configuration (without any validation or defaults).
 	 * @internal
 	 */
-	getOption<T extends EditorOption>(id: T): FindComputedEditorOptionValueById<T>;
-
-	/**
-	 * Returns the editor's configuration (without any validation or defaults).
-	 */
-	getRawOptions(): IEditorOptions;
+	getRawConfiguration(): editorOptions.IEditorOptions;
 
 	/**
 	 * Get value of the current model attached to this editor.
@@ -616,7 +612,7 @@ export interface ICodeEditor extends editorCommon.IEditor {
 	 * @param edits The edits to execute.
 	 * @param endCursorState Cursor state after the edits were applied.
 	 */
-	executeEdits(source: string, edits: IIdentifiedSingleEditOperation[], endCursorState?: ICursorStateComputer | Selection[]): boolean;
+	executeEdits(source: string, edits: IIdentifiedSingleEditOperation[], endCursorState?: Selection[]): boolean;
 
 	/**
 	 * Execute multiple (concomitant) commands on the editor.
@@ -659,7 +655,7 @@ export interface ICodeEditor extends editorCommon.IEditor {
 	/**
 	 * Get the layout info for the editor.
 	 */
-	getLayoutInfo(): EditorLayoutInfo;
+	getLayoutInfo(): editorOptions.EditorLayoutInfo;
 
 	/**
 	 * Returns the ranges that are currently visible.

@@ -334,6 +334,7 @@ function wrapRelativePattern(parsedPattern: ParsedStringPattern, arg2: string | 
 		if (!extpath.isEqualOrParent(path, arg2.base)) {
 			return null;
 		}
+
 		return parsedPattern(paths.relative(arg2.base, path), basename);
 	};
 }

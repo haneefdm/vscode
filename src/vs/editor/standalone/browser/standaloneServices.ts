@@ -47,7 +47,7 @@ import { MarkerDecorationsService } from 'vs/editor/common/services/markerDecora
 import { IAccessibilityService } from 'vs/platform/accessibility/common/accessibility';
 import { BrowserAccessibilityService } from 'vs/platform/accessibility/common/accessibilityService';
 import { ILayoutService } from 'vs/platform/layout/browser/layoutService';
-import { getSingletonServiceDescriptors } from 'vs/platform/instantiation/common/extensions';
+import { getServices } from 'vs/platform/instantiation/common/extensions';
 
 export interface IEditorOverrideServices {
 	[index: string]: any;
@@ -100,7 +100,7 @@ export module StaticServices {
 		let result = new ServiceCollection();
 
 		// make sure to add all services that use `registerSingleton`
-		for (const [id, descriptor] of getSingletonServiceDescriptors()) {
+		for (const { id, descriptor } of getServices()) {
 			result.set(id, descriptor);
 		}
 
@@ -139,6 +139,8 @@ export module StaticServices {
 	export const dialogService = define(IDialogService, () => new SimpleDialogService());
 
 	export const notificationService = define(INotificationService, () => new SimpleNotificationService());
+
+	export const accessibilityService = define(IAccessibilityService, () => new BrowserAccessibilityService());
 
 	export const markerService = define(IMarkerService, () => new MarkerService());
 
@@ -191,8 +193,6 @@ export class DynamicStandaloneServices extends Disposable {
 		};
 
 		let contextKeyService = ensure(IContextKeyService, () => this._register(new ContextKeyService(configurationService)));
-
-		ensure(IAccessibilityService, () => new BrowserAccessibilityService(contextKeyService, configurationService));
 
 		ensure(IListService, () => new ListService(contextKeyService));
 

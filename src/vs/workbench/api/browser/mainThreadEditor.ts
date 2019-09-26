@@ -6,7 +6,7 @@
 import { Emitter, Event } from 'vs/base/common/event';
 import { DisposableStore } from 'vs/base/common/lifecycle';
 import { ICodeEditor } from 'vs/editor/browser/editorBrowser';
-import { RenderLineNumbersType, TextEditorCursorStyle, cursorStyleToString, EditorOption } from 'vs/editor/common/config/editorOptions';
+import { RenderLineNumbersType, TextEditorCursorStyle, cursorStyleToString } from 'vs/editor/common/config/editorOptions';
 import { IRange, Range } from 'vs/editor/common/core/range';
 import { ISelection, Selection } from 'vs/editor/common/core/selection';
 import * as editorCommon from 'vs/editor/common/editorCommon';
@@ -58,10 +58,9 @@ export class MainThreadTextEditorProperties {
 		let cursorStyle: TextEditorCursorStyle;
 		let lineNumbers: RenderLineNumbersType;
 		if (codeEditor) {
-			const options = codeEditor.getOptions();
-			const lineNumbersOpts = options.get(EditorOption.lineNumbers);
-			cursorStyle = options.get(EditorOption.cursorStyle);
-			lineNumbers = lineNumbersOpts.renderType;
+			const codeEditorOpts = codeEditor.getConfiguration();
+			cursorStyle = codeEditorOpts.viewInfo.cursorStyle;
+			lineNumbers = codeEditorOpts.viewInfo.renderLineNumbers;
 		} else if (previousProperties) {
 			cursorStyle = previousProperties.options.cursorStyle;
 			lineNumbers = previousProperties.options.lineNumbers;
@@ -179,7 +178,7 @@ export class MainThreadTextEditor {
 	private readonly _focusTracker: IFocusTracker;
 	private readonly _codeEditorListeners = new DisposableStore();
 
-	private _properties: MainThreadTextEditorProperties | null;
+	private _properties: MainThreadTextEditorProperties;
 	private readonly _onPropertiesChanged: Emitter<IEditorPropertiesChangeData>;
 
 	constructor(
@@ -192,7 +191,6 @@ export class MainThreadTextEditor {
 		this._id = id;
 		this._model = model;
 		this._codeEditor = null;
-		this._properties = null;
 		this._focusTracker = focusTracker;
 		this._modelService = modelService;
 
@@ -291,7 +289,7 @@ export class MainThreadTextEditor {
 	}
 
 	public getProperties(): MainThreadTextEditorProperties {
-		return this._properties!;
+		return this._properties;
 	}
 
 	public get onPropertiesChanged(): Event<IEditorPropertiesChangeData> {
@@ -306,7 +304,7 @@ export class MainThreadTextEditor {
 
 		const newSelections = selections.map(Selection.liftSelection);
 		this._setProperties(
-			new MainThreadTextEditorProperties(newSelections, this._properties!.options, this._properties!.visibleRanges),
+			new MainThreadTextEditorProperties(newSelections, this._properties.options, this._properties.visibleRanges),
 			null
 		);
 	}
@@ -486,7 +484,7 @@ export class MainThreadTextEditor {
 		this._codeEditor.focus();
 
 		// make modifications
-		snippetController.insert(template, { overwriteBefore: 0, overwriteAfter: 0, undoStopBefore: opts.undoStopBefore, undoStopAfter: opts.undoStopAfter });
+		snippetController.insert(template, 0, 0, opts.undoStopBefore, opts.undoStopAfter);
 
 		return true;
 	}

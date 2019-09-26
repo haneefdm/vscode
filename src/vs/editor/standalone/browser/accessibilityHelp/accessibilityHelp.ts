@@ -7,7 +7,7 @@ import 'vs/css!./accessibilityHelp';
 import * as browser from 'vs/base/browser/browser';
 import * as dom from 'vs/base/browser/dom';
 import { FastDomNode, createFastDomNode } from 'vs/base/browser/fastDomNode';
-import { renderFormattedText } from 'vs/base/browser/formattedTextRenderer';
+import { renderFormattedText } from 'vs/base/browser/htmlContentRenderer';
 import { alert } from 'vs/base/browser/ui/aria/aria';
 import { Widget } from 'vs/base/browser/ui/widget';
 import { KeyCode, KeyMod } from 'vs/base/common/keyCodes';
@@ -31,7 +31,6 @@ import { contrastBorder, editorWidgetBackground, widgetShadow, editorWidgetForeg
 import { registerThemingParticipant } from 'vs/platform/theme/common/themeService';
 import { AccessibilitySupport } from 'vs/platform/accessibility/common/accessibility';
 import { AccessibilityHelpNLS } from 'vs/editor/common/standaloneStrings';
-import { EditorOption } from 'vs/editor/common/config/editorOptions';
 
 const CONTEXT_ACCESSIBILITY_WIDGET_VISIBLE = new RawContextKey<boolean>('accessibilityHelpWidgetVisible', false);
 
@@ -164,7 +163,7 @@ class AccessibilityHelpWidget extends Widget implements IOverlayWidget {
 			if (e.equals(KeyMod.CtrlCmd | KeyCode.KEY_H)) {
 				alert(AccessibilityHelpNLS.openingDocs);
 
-				let url = (<IEditorConstructionOptions>this._editor.getRawOptions()).accessibilityHelpUrl;
+				let url = (<IEditorConstructionOptions>this._editor.getRawConfiguration()).accessibilityHelpUrl;
 				if (typeof url === 'undefined') {
 					url = 'https://go.microsoft.com/fwlink/?linkid=852450';
 				}
@@ -224,7 +223,7 @@ class AccessibilityHelpWidget extends Widget implements IOverlayWidget {
 	}
 
 	private _buildContent() {
-		const options = this._editor.getOptions();
+		let opts = this._editor.getConfiguration();
 
 		const selections = this._editor.getSelections();
 		let charactersSelected = 0;
@@ -240,14 +239,14 @@ class AccessibilityHelpWidget extends Widget implements IOverlayWidget {
 
 		let text = getSelectionLabel(selections, charactersSelected);
 
-		if (options.get(EditorOption.inDiffEditor)) {
-			if (options.get(EditorOption.readOnly)) {
+		if (opts.wrappingInfo.inDiffEditor) {
+			if (opts.readOnly) {
 				text += AccessibilityHelpNLS.readonlyDiffEditor;
 			} else {
 				text += AccessibilityHelpNLS.editableDiffEditor;
 			}
 		} else {
-			if (options.get(EditorOption.readOnly)) {
+			if (opts.readOnly) {
 				text += AccessibilityHelpNLS.readonlyEditor;
 			} else {
 				text += AccessibilityHelpNLS.editableEditor;
@@ -259,7 +258,7 @@ class AccessibilityHelpWidget extends Widget implements IOverlayWidget {
 				? AccessibilityHelpNLS.changeConfigToOnMac
 				: AccessibilityHelpNLS.changeConfigToOnWinLinux
 		);
-		switch (options.get(EditorOption.accessibilitySupport)) {
+		switch (opts.accessibilitySupport) {
 			case AccessibilitySupport.Unknown:
 				text += '\n\n - ' + turnOnMessage;
 				break;
@@ -273,7 +272,7 @@ class AccessibilityHelpWidget extends Widget implements IOverlayWidget {
 		}
 
 
-		if (options.get(EditorOption.tabFocusMode)) {
+		if (opts.tabFocusMode) {
 			text += '\n\n - ' + this._descriptionForCommand(ToggleTabFocusModeAction.ID, AccessibilityHelpNLS.tabFocusModeOnMsg, AccessibilityHelpNLS.tabFocusModeOnMsgNoKb);
 		} else {
 			text += '\n\n - ' + this._descriptionForCommand(ToggleTabFocusModeAction.ID, AccessibilityHelpNLS.tabFocusModeOffMsg, AccessibilityHelpNLS.tabFocusModeOffMsgNoKb);

@@ -107,7 +107,7 @@ suite('MainThreadEditors', () => {
 			editorGroupService,
 			bulkEditService,
 			new class extends mock<IPanelService>() implements IPanelService {
-				_serviceBrand: undefined;
+				_serviceBrand: any;
 				onDidPanelOpen = Event.None;
 				onDidPanelClose = Event.None;
 				getActivePanel() {

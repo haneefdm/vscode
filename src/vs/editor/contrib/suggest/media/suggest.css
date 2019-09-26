@@ -45,17 +45,6 @@
 	float: right;
 }
 
-/* MarkupContent Layout */
-.monaco-editor .suggest-widget > .details ul {
-	padding-left: 20px;
-}
-.monaco-editor .suggest-widget > .details ol {
-	padding-left: 20px;
-}
-
-.monaco-editor .suggest-widget > .details p > code {
-	font-family: var(--monaco-monospace-font);
-}
 
 /* Styles for Message element for when widget is loading or is empty */
 .monaco-editor .suggest-widget > .message {
@@ -121,9 +110,7 @@
 
 .monaco-editor .suggest-widget .details > .monaco-scrollable-element > .body > .header > .close {
 	background-image: url('./close-light.svg');
-	position: absolute;
-	top: 0;
-	right: 0;
+	float: right;
 	margin-right: 5px;
 }
 
@@ -166,17 +153,9 @@
 }
 
 /** Styles for each row in the list **/
-
-.monaco-editor .suggest-widget .monaco-list .monaco-list-row .monaco-icon-label.deprecated {
-	opacity: 0.66;
-	text-decoration: unset;
-}
-.monaco-editor .suggest-widget .monaco-list .monaco-list-row .monaco-icon-label.deprecated > .monaco-icon-label-description-container {
-	text-decoration: line-through;
-}
-
 .monaco-editor .suggest-widget .monaco-list .monaco-list-row .monaco-icon-label::before {
 	height: 100%;
+
 }
 
 .monaco-editor .suggest-widget .monaco-list .monaco-list-row .icon {
@@ -200,6 +179,7 @@
 
 .monaco-editor .suggest-widget .monaco-list .monaco-list-row .monaco-icon-label.suggest-icon::before {
 	content: ' ';
+	background-image: url('Misc_16x.svg');
 	background-repeat: no-repeat;
 	background-position: center;
 	background-size: 75%;
@@ -272,7 +252,7 @@
 	text-overflow: ellipsis;
 	opacity: 0.7;
 	word-break: break-all;
-	margin: 0 24px 0 0;
+	margin: 0;
 	padding: 4px 0 12px 5px;
 }
 
@@ -325,6 +305,9 @@
 .monaco-editor.hc-black .suggest-widget .monaco-list .monaco-list-row > .contents > .main > .readMore {
 	background-image: url('./info-dark.svg');
 }
+
+.monaco-editor.vs-dark .suggest-widget .monaco-list .monaco-list-row .suggest-icon::before,
+.monaco-editor.hc-black .suggest-widget .monaco-list .monaco-list-row .suggest-icon::before { background-image: url('Misc_inverse_16x.svg'); }
 
 .monaco-editor.vs-dark .suggest-widget .monaco-list .monaco-list-row .suggest-icon.method::before,
 .monaco-editor.hc-black .suggest-widget .monaco-list .monaco-list-row .suggest-icon.method::before,

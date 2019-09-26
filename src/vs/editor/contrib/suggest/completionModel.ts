@@ -6,7 +6,7 @@
 import { fuzzyScore, fuzzyScoreGracefulAggressive, FuzzyScorer, FuzzyScore, anyScore } from 'vs/base/common/filters';
 import { CompletionItemProvider, CompletionItemKind } from 'vs/editor/common/modes';
 import { CompletionItem } from './suggest';
-import { InternalSuggestOptions } from 'vs/editor/common/config/editorOptions';
+import { InternalSuggestOptions, EDITOR_DEFAULTS } from 'vs/editor/common/config/editorOptions';
 import { WordDistance } from 'vs/editor/contrib/suggest/wordDistance';
 import { CharCode } from 'vs/base/common/charCode';
 import { compareIgnoreCase } from 'vs/base/common/strings';
@@ -29,10 +29,8 @@ export interface ICompletionStats {
 }
 
 export class LineContext {
-	constructor(
-		readonly leadingLineContent: string,
-		readonly characterCountDelta: number,
-	) { }
+	leadingLineContent: string;
+	characterCountDelta: number;
 }
 
 const enum Refilter {
@@ -51,17 +49,16 @@ export class CompletionModel {
 
 	private _lineContext: LineContext;
 	private _refilterKind: Refilter;
-	private _filteredItems?: StrictCompletionItem[];
-	private _isIncomplete?: Set<CompletionItemProvider>;
-	private _stats?: ICompletionStats;
+	private _filteredItems: StrictCompletionItem[];
+	private _isIncomplete: Set<CompletionItemProvider>;
+	private _stats: ICompletionStats;
 
 	constructor(
 		items: CompletionItem[],
 		column: number,
 		lineContext: LineContext,
 		wordDistance: WordDistance,
-		options: InternalSuggestOptions,
-		snippetSuggestions: 'top' | 'bottom' | 'inline' | 'none'
+		options: InternalSuggestOptions = EDITOR_DEFAULTS.contribInfo.suggest
 	) {
 		this._items = items;
 		this._column = column;
@@ -70,9 +67,9 @@ export class CompletionModel {
 		this._refilterKind = Refilter.All;
 		this._lineContext = lineContext;
 
-		if (snippetSuggestions === 'top') {
+		if (options.snippets === 'top') {
 			this._snippetCompareFn = CompletionModel._compareCompletionItemsSnippetsUp;
-		} else if (snippetSuggestions === 'bottom') {
+		} else if (options.snippets === 'bottom') {
 			this._snippetCompareFn = CompletionModel._compareCompletionItemsSnippetsDown;
 		}
 	}
@@ -92,12 +89,12 @@ export class CompletionModel {
 
 	get items(): CompletionItem[] {
 		this._ensureCachedState();
-		return this._filteredItems!;
+		return this._filteredItems;
 	}
 
 	get incomplete(): Set<CompletionItemProvider> {
 		this._ensureCachedState();
-		return this._isIncomplete!;
+		return this._isIncomplete;
 	}
 
 	adopt(except: Set<CompletionItemProvider>): CompletionItem[] {
@@ -120,7 +117,7 @@ export class CompletionModel {
 
 	get stats(): ICompletionStats {
 		this._ensureCachedState();
-		return this._stats!;
+		return this._stats;
 	}
 
 	private _ensureCachedState(): void {
@@ -139,7 +136,7 @@ export class CompletionModel {
 		let wordLow = '';
 
 		// incrementally filter less
-		const source = this._refilterKind === Refilter.All ? this._items : this._filteredItems!;
+		const source = this._refilterKind === Refilter.All ? this._items : this._filteredItems;
 		const target: StrictCompletionItem[] = [];
 
 		// picks a score function based on the number of

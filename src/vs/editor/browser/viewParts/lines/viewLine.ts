@@ -12,11 +12,10 @@ import { IStringBuilder } from 'vs/editor/common/core/stringBuilder';
 import { IConfiguration } from 'vs/editor/common/editorCommon';
 import { HorizontalRange } from 'vs/editor/common/view/renderingContext';
 import { LineDecoration } from 'vs/editor/common/viewLayout/lineDecorations';
-import { CharacterMapping, ForeignElementType, RenderLineInput, renderViewLine, LineRange } from 'vs/editor/common/viewLayout/viewLineRenderer';
+import { CharacterMapping, ForeignElementType, RenderLineInput, renderViewLine } from 'vs/editor/common/viewLayout/viewLineRenderer';
 import { ViewportData } from 'vs/editor/common/viewLayout/viewLinesViewportData';
 import { InlineDecorationType } from 'vs/editor/common/viewModel/viewModel';
 import { HIGH_CONTRAST, ThemeType } from 'vs/platform/theme/common/themeService';
-import { EditorOption } from 'vs/editor/common/config/editorOptions';
 
 const canUseFastRenderedViewLine = (function () {
 	if (platform.isNative) {
@@ -70,7 +69,7 @@ export class DomReadingContext {
 
 export class ViewLineOptions {
 	public readonly themeType: ThemeType;
-	public readonly renderWhitespace: 'none' | 'boundary' | 'selection' | 'all';
+	public readonly renderWhitespace: 'none' | 'boundary' | 'all';
 	public readonly renderControlCharacters: boolean;
 	public readonly spaceWidth: number;
 	public readonly useMonospaceOptimizations: boolean;
@@ -81,20 +80,17 @@ export class ViewLineOptions {
 
 	constructor(config: IConfiguration, themeType: ThemeType) {
 		this.themeType = themeType;
-		const options = config.options;
-		const fontInfo = options.get(EditorOption.fontInfo);
-		this.renderWhitespace = options.get(EditorOption.renderWhitespace);
-		this.renderControlCharacters = options.get(EditorOption.renderControlCharacters);
-		this.spaceWidth = fontInfo.spaceWidth;
+		this.renderWhitespace = config.editor.viewInfo.renderWhitespace;
+		this.renderControlCharacters = config.editor.viewInfo.renderControlCharacters;
+		this.spaceWidth = config.editor.fontInfo.spaceWidth;
 		this.useMonospaceOptimizations = (
-			fontInfo.isMonospace
-			&& !options.get(EditorOption.disableMonospaceOptimizations)
-			&& !options.get(EditorOption.fontLigatures)
+			config.editor.fontInfo.isMonospace
+			&& !config.editor.viewInfo.disableMonospaceOptimizations
 		);
-		this.canUseHalfwidthRightwardsArrow = fontInfo.canUseHalfwidthRightwardsArrow;
-		this.lineHeight = options.get(EditorOption.lineHeight);
-		this.stopRenderingLineAfter = options.get(EditorOption.stopRenderingLineAfter);
-		this.fontLigatures = options.get(EditorOption.fontLigatures);
+		this.canUseHalfwidthRightwardsArrow = config.editor.fontInfo.canUseHalfwidthRightwardsArrow;
+		this.lineHeight = config.editor.lineHeight;
+		this.stopRenderingLineAfter = config.editor.viewInfo.stopRenderingLineAfter;
+		this.fontLigatures = config.editor.viewInfo.fontLigatures;
 	}
 
 	public equals(other: ViewLineOptions): boolean {
@@ -156,7 +152,7 @@ export class ViewLine implements IVisibleLine {
 		this._options = newOptions;
 	}
 	public onSelectionChanged(): boolean {
-		if (alwaysRenderInlineSelection || this._options.themeType === HIGH_CONTRAST || this._options.renderWhitespace === 'selection') {
+		if (alwaysRenderInlineSelection || this._options.themeType === HIGH_CONTRAST) {
 			this._isMaybeInvalid = true;
 			return true;
 		}
@@ -175,9 +171,7 @@ export class ViewLine implements IVisibleLine {
 		const options = this._options;
 		const actualInlineDecorations = LineDecoration.filter(lineData.inlineDecorations, lineNumber, lineData.minColumn, lineData.maxColumn);
 
-		// Only send selection information when needed for rendering whitespace
-		let selectionsOnLine: LineRange[] | null = null;
-		if (alwaysRenderInlineSelection || options.themeType === HIGH_CONTRAST || this._options.renderWhitespace === 'selection') {
+		if (alwaysRenderInlineSelection || options.themeType === HIGH_CONTRAST) {
 			const selections = viewportData.selections;
 			for (const selection of selections) {
 
@@ -190,15 +184,7 @@ export class ViewLine implements IVisibleLine {
 				const endColumn = (selection.endLineNumber === lineNumber ? selection.endColumn : lineData.maxColumn);
 
 				if (startColumn < endColumn) {
-					if (this._options.renderWhitespace !== 'selection') {
-						actualInlineDecorations.push(new LineDecoration(startColumn, endColumn, 'inline-selected-text', InlineDecorationType.Regular));
-					} else {
-						if (!selectionsOnLine) {
-							selectionsOnLine = [];
-						}
-
-						selectionsOnLine.push(new LineRange(startColumn - 1, endColumn - 1));
-					}
+					actualInlineDecorations.push(new LineDecoration(startColumn, endColumn, 'inline-selected-text', InlineDecorationType.Regular));
 				}
 			}
 		}
@@ -218,8 +204,7 @@ export class ViewLine implements IVisibleLine {
 			options.stopRenderingLineAfter,
 			options.renderWhitespace,
 			options.renderControlCharacters,
-			options.fontLigatures,
-			selectionsOnLine
+			options.fontLigatures
 		);
 
 		if (this._renderedViewLine && this._renderedViewLine.input.equals(renderLineInput)) {

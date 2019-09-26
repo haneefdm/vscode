@@ -5,7 +5,7 @@
 import * as assert from 'assert';
 import { KeyChord, KeyCode, KeyMod, SimpleKeybinding, createKeybinding, createSimpleKeybinding } from 'vs/base/common/keyCodes';
 import { OS } from 'vs/base/common/platform';
-import { ContextKeyExpr, IContext } from 'vs/platform/contextkey/common/contextkey';
+import { ContextKeyAndExpr, ContextKeyExpr, IContext } from 'vs/platform/contextkey/common/contextkey';
 import { KeybindingResolver } from 'vs/platform/keybinding/common/keybindingResolver';
 import { ResolvedKeybindingItem } from 'vs/platform/keybinding/common/resolvedKeybindingItem';
 import { USLayoutResolvedKeybinding } from 'vs/platform/keybinding/common/usLayoutResolvedKeybinding';
@@ -20,13 +20,13 @@ function createContext(ctx: any) {
 
 suite('KeybindingResolver', () => {
 
-	function kbItem(keybinding: number, command: string, commandArgs: any, when: ContextKeyExpr | undefined, isDefault: boolean): ResolvedKeybindingItem {
+	function kbItem(keybinding: number, command: string, commandArgs: any, when: ContextKeyExpr, isDefault: boolean): ResolvedKeybindingItem {
 		const resolvedKeybinding = (keybinding !== 0 ? new USLayoutResolvedKeybinding(createKeybinding(keybinding, OS)!, OS) : undefined);
 		return new ResolvedKeybindingItem(
 			resolvedKeybinding,
 			command,
 			commandArgs,
-			when,
+			when ? when.normalize() : undefined,
 			isDefault
 		);
 	}
@@ -191,41 +191,64 @@ suite('KeybindingResolver', () => {
 	});
 
 	test('contextIsEntirelyIncluded', () => {
-		const assertIsIncluded = (a: string | null, b: string | null) => {
-			assert.equal(KeybindingResolver.whenIsEntirelyIncluded(ContextKeyExpr.deserialize(a), ContextKeyExpr.deserialize(b)), true);
+		let assertIsIncluded = (a: ContextKeyExpr[], b: ContextKeyExpr[]) => {
+			let tmpA = new ContextKeyAndExpr(a).normalize();
+			let tmpB = new ContextKeyAndExpr(b).normalize();
+			assert.equal(KeybindingResolver.whenIsEntirelyIncluded(tmpA, tmpB), true);
 		};
-		const assertIsNotIncluded = (a: string | null, b: string | null) => {
-			assert.equal(KeybindingResolver.whenIsEntirelyIncluded(ContextKeyExpr.deserialize(a), ContextKeyExpr.deserialize(b)), false);
+		let assertIsNotIncluded = (a: ContextKeyExpr[], b: ContextKeyExpr[]) => {
+			let tmpA = new ContextKeyAndExpr(a).normalize();
+			let tmpB = new ContextKeyAndExpr(b).normalize();
+			assert.equal(KeybindingResolver.whenIsEntirelyIncluded(tmpA, tmpB), false);
 		};
+		let key1IsTrue = ContextKeyExpr.equals('key1', true);
+		let key1IsNotFalse = ContextKeyExpr.notEquals('key1', false);
+		let key1IsFalse = ContextKeyExpr.equals('key1', false);
+		let key1IsNotTrue = ContextKeyExpr.notEquals('key1', true);
+		let key2IsTrue = ContextKeyExpr.equals('key2', true);
+		let key2IsNotFalse = ContextKeyExpr.notEquals('key2', false);
+		let key3IsTrue = ContextKeyExpr.equals('key3', true);
+		let key4IsTrue = ContextKeyExpr.equals('key4', true);
 
-		assertIsIncluded('key1', null);
-		assertIsIncluded('key1', '');
-		assertIsIncluded('key1', 'key1');
-		assertIsIncluded('!key1', '');
-		assertIsIncluded('!key1', '!key1');
-		assertIsIncluded('key2', '');
-		assertIsIncluded('key2', 'key2');
-		assertIsIncluded('key1 && key1 && key2 && key2', 'key2');
-		assertIsIncluded('key1 && key2', 'key2');
-		assertIsIncluded('key1 && key2', 'key1');
-		assertIsIncluded('key1 && key2', '');
-		assertIsIncluded('key1', 'key1 || key2');
-		assertIsIncluded('key1 || !key1', 'key2 || !key2');
-		assertIsIncluded('key1', 'key1 || key2 && key3');
+		assertIsIncluded([key1IsTrue], null!);
+		assertIsIncluded([key1IsTrue], []);
+		assertIsIncluded([key1IsTrue], [key1IsTrue]);
+		assertIsIncluded([key1IsTrue], [key1IsNotFalse]);
 
-		assertIsNotIncluded('key1', '!key1');
-		assertIsNotIncluded('!key1', 'key1');
-		assertIsNotIncluded('key1 && key2', 'key3');
-		assertIsNotIncluded('key1 && key2', 'key4');
-		assertIsNotIncluded('key1', 'key2');
-		assertIsNotIncluded('key1 || key2', 'key2');
-		assertIsNotIncluded('', 'key2');
-		assertIsNotIncluded(null, 'key2');
+		assertIsIncluded([key1IsFalse], []);
+		assertIsIncluded([key1IsFalse], [key1IsFalse]);
+		assertIsIncluded([key1IsFalse], [key1IsNotTrue]);
+
+		assertIsIncluded([key2IsNotFalse], []);
+		assertIsIncluded([key2IsNotFalse], [key2IsNotFalse]);
+		assertIsIncluded([key2IsNotFalse], [key2IsTrue]);
+
+		assertIsIncluded([key1IsTrue, key2IsNotFalse], [key2IsTrue]);
+		assertIsIncluded([key1IsTrue, key2IsNotFalse], [key2IsNotFalse]);
+		assertIsIncluded([key1IsTrue, key2IsNotFalse], [key1IsTrue]);
+		assertIsIncluded([key1IsTrue, key2IsNotFalse], [key1IsNotFalse]);
+		assertIsIncluded([key1IsTrue, key2IsNotFalse], []);
+
+		assertIsNotIncluded([key1IsTrue], [key1IsFalse]);
+		assertIsNotIncluded([key1IsTrue], [key1IsNotTrue]);
+		assertIsNotIncluded([key1IsNotFalse], [key1IsFalse]);
+		assertIsNotIncluded([key1IsNotFalse], [key1IsNotTrue]);
+
+		assertIsNotIncluded([key1IsFalse], [key1IsTrue]);
+		assertIsNotIncluded([key1IsFalse], [key1IsNotFalse]);
+		assertIsNotIncluded([key1IsNotTrue], [key1IsTrue]);
+		assertIsNotIncluded([key1IsNotTrue], [key1IsNotFalse]);
+
+		assertIsNotIncluded([key1IsTrue, key2IsNotFalse], [key3IsTrue]);
+		assertIsNotIncluded([key1IsTrue, key2IsNotFalse], [key4IsTrue]);
+		assertIsNotIncluded([key1IsTrue], [key2IsTrue]);
+		assertIsNotIncluded([], [key2IsTrue]);
+		assertIsNotIncluded(null!, [key2IsTrue]);
 	});
 
 	test('resolve command', function () {
 
-		function _kbItem(keybinding: number, command: string, when: ContextKeyExpr | undefined): ResolvedKeybindingItem {
+		function _kbItem(keybinding: number, command: string, when: ContextKeyExpr): ResolvedKeybindingItem {
 			return kbItem(keybinding, command, null, when, true);
 		}
 

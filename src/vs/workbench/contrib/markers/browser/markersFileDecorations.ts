@@ -19,7 +19,7 @@ import { LifecyclePhase } from 'vs/platform/lifecycle/common/lifecycle';
 class MarkersDecorationsProvider implements IDecorationsProvider {
 
 	readonly label: string = localize('label', "Problems");
-	readonly onDidChange: Event<readonly URI[]>;
+	readonly onDidChange: Event<URI[]>;
 
 	constructor(
 		private readonly _markerService: IMarkerService
@@ -56,8 +56,8 @@ class MarkersDecorationsProvider implements IDecorationsProvider {
 class MarkersFileDecorations implements IWorkbenchContribution {
 
 	private readonly _disposables: IDisposable[];
-	private _provider?: IDisposable;
-	private _enabled?: boolean;
+	private _provider: IDisposable;
+	private _enabled: boolean;
 
 	constructor(
 		@IMarkerService private readonly _markerService: IMarkerService,

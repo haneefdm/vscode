@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { DriverChannel, WindowDriverChannelClient, IWindowDriverRegistry, WindowDriverRegistryChannel, IDriverOptions } from 'vs/platform/driver/node/driver';
+import { IDriver, DriverChannel, IElement, WindowDriverChannelClient, IWindowDriverRegistry, WindowDriverRegistryChannel, IWindowDriver, IDriverOptions } from 'vs/platform/driver/node/driver';
 import { IWindowsMainService } from 'vs/platform/windows/electron-main/windows';
 import { serve as serveNet } from 'vs/base/parts/ipc/node/ipc.net';
 import { combinedDisposable, IDisposable } from 'vs/base/common/lifecycle';
@@ -17,8 +17,6 @@ import { IEnvironmentService } from 'vs/platform/environment/common/environment'
 import { ScanCodeBinding } from 'vs/base/common/scanCode';
 import { KeybindingParser } from 'vs/base/common/keybindingParser';
 import { timeout } from 'vs/base/common/async';
-import { IDriver, IElement, IWindowDriver } from 'vs/platform/driver/common/driver';
-import { NativeImage } from 'electron';
 
 function isSilentKeyCode(keyCode: KeyCode) {
 	return keyCode < KeyCode.KEY_0;
@@ -26,16 +24,16 @@ function isSilentKeyCode(keyCode: KeyCode) {
 
 export class Driver implements IDriver, IWindowDriverRegistry {
 
-	_serviceBrand: undefined;
+	_serviceBrand: any;
 
 	private registeredWindowIds = new Set<number>();
 	private reloadingWindowIds = new Set<number>();
-	private readonly onDidReloadingChange = new Emitter<void>();
+	private onDidReloadingChange = new Emitter<void>();
 
 	constructor(
 		private windowServer: IPCServer,
 		private options: IDriverOptions,
-		@IWindowsMainService private readonly windowsMainService: IWindowsMainService
+		@IWindowsMainService private readonly windowsService: IWindowsMainService
 	) { }
 
 	async registerWindowDriver(windowId: number): Promise<IDriverOptions> {
@@ -50,7 +48,7 @@ export class Driver implements IDriver, IWindowDriverRegistry {
 	}
 
 	async getWindowIds(): Promise<number[]> {
-		return this.windowsMainService.getWindows()
+		return this.windowsService.getWindows()
 			.map(w => w.id)
 			.filter(id => this.registeredWindowIds.has(id) && !this.reloadingWindowIds.has(id));
 	}
@@ -58,28 +56,28 @@ export class Driver implements IDriver, IWindowDriverRegistry {
 	async capturePage(windowId: number): Promise<string> {
 		await this.whenUnfrozen(windowId);
 
-		const window = this.windowsMainService.getWindowById(windowId);
+		const window = this.windowsService.getWindowById(windowId);
 		if (!window) {
 			throw new Error('Invalid window');
 		}
 		const webContents = window.win.webContents;
-		const image = await new Promise<NativeImage>(c => webContents.capturePage(c));
+		const image = await new Promise<Electron.NativeImage>(c => webContents.capturePage(c));
 		return image.toPNG().toString('base64');
 	}
 
 	async reloadWindow(windowId: number): Promise<void> {
 		await this.whenUnfrozen(windowId);
 
-		const window = this.windowsMainService.getWindowById(windowId);
+		const window = this.windowsService.getWindowById(windowId);
 		if (!window) {
 			throw new Error('Invalid window');
 		}
 		this.reloadingWindowIds.add(windowId);
-		this.windowsMainService.reload(window);
+		this.windowsService.reload(window);
 	}
 
 	async exitApplication(): Promise<void> {
-		return this.windowsMainService.quit();
+		return this.windowsService.quit();
 	}
 
 	async dispatchKeybinding(windowId: number, keybinding: string): Promise<void> {
@@ -97,7 +95,7 @@ export class Driver implements IDriver, IWindowDriverRegistry {
 			throw new Error('ScanCodeBindings not supported');
 		}
 
-		const window = this.windowsMainService.getWindowById(windowId);
+		const window = this.windowsService.getWindowById(windowId);
 		if (!window) {
 			throw new Error('Invalid window');
 		}
@@ -163,11 +161,6 @@ export class Driver implements IDriver, IWindowDriverRegistry {
 	async getElements(windowId: number, selector: string, recursive: boolean): Promise<IElement[]> {
 		const windowDriver = await this.getWindowDriver(windowId);
 		return await windowDriver.getElements(selector, recursive);
-	}
-
-	async getElementXY(windowId: number, selector: string, xoffset?: number, yoffset?: number): Promise<{ x: number; y: number; }> {
-		const windowDriver = await this.getWindowDriver(windowId);
-		return await windowDriver.getElementXY(selector, xoffset, yoffset);
 	}
 
 	async typeInEditor(windowId: number, selector: string, text: string): Promise<void> {

@@ -16,7 +16,7 @@ class QueueProtocol implements IMessagePassingProtocol {
 	private buffering = true;
 	private buffers: VSBuffer[] = [];
 
-	private readonly _onMessage = new Emitter<VSBuffer>({
+	private _onMessage = new Emitter<VSBuffer>({
 		onFirstListenerDidAdd: () => {
 			for (const buffer of this.buffers) {
 				this._onMessage.fire(buffer);
@@ -31,7 +31,7 @@ class QueueProtocol implements IMessagePassingProtocol {
 	});
 
 	readonly onMessage = this._onMessage.event;
-	other!: QueueProtocol;
+	other: QueueProtocol;
 
 	send(buffer: VSBuffer): void {
 		this.other.receive(buffer);
@@ -57,7 +57,7 @@ function createProtocolPair(): [IMessagePassingProtocol, IMessagePassingProtocol
 
 class TestIPCClient extends IPCClient<string> {
 
-	private readonly _onDidDisconnect = new Emitter<void>();
+	private _onDidDisconnect = new Emitter<void>();
 	readonly onDidDisconnect = this._onDidDisconnect.event;
 
 	constructor(protocol: IMessagePassingProtocol, id: string) {
@@ -107,7 +107,7 @@ interface ITestService {
 
 class TestService implements ITestService {
 
-	private readonly _pong = new Emitter<string>();
+	private _pong = new Emitter<string>();
 	readonly pong = this._pong.event;
 
 	marco(): Promise<string> {

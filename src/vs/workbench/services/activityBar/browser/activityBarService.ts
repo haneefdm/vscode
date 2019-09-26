@@ -10,7 +10,7 @@ import { IDisposable } from 'vs/base/common/lifecycle';
 export const IActivityBarService = createDecorator<IActivityBarService>('activityBarService');
 
 export interface IActivityBarService {
-	_serviceBrand: undefined;
+	_serviceBrand: any;
 
 	/**
 	 * Show an activity in a viewlet.

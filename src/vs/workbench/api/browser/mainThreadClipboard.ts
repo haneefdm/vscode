@@ -20,10 +20,11 @@ export class MainThreadClipboard implements MainThreadClipboardShape {
 	}
 
 	$readText(): Promise<string> {
-		return this._clipboardService.readText();
+		return Promise.resolve(this._clipboardService.readText());
 	}
 
 	$writeText(value: string): Promise<void> {
-		return this._clipboardService.writeText(value);
+		this._clipboardService.writeText(value);
+		return Promise.resolve();
 	}
 }

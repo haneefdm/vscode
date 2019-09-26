@@ -11,26 +11,14 @@ function getTagBodyText(tag: Proto.JSDocTagInfo): string | undefined {
 		return undefined;
 	}
 
-	// Convert to markdown code block if it is not already one
-	function makeCodeblock(text: string): string {
-		if (text.match(/^\s*[~`]{3}/g)) {
-			return text;
-		}
-		return '```\n' + text + '\n```';
-	}
-
 	switch (tag.name) {
 		case 'example':
-			// check for caption tags, fix for #79704
-			const captionTagMatches = tag.text.match(/<caption>(.*?)<\/caption>\s*(\r\n|\n)/);
-			if (captionTagMatches && captionTagMatches.index === 0) {
-				return captionTagMatches[1] + '\n\n' + makeCodeblock(tag.text.substr(captionTagMatches[0].length));
-			} else {
-				return makeCodeblock(tag.text);
-			}
-
 		case 'default':
-			return makeCodeblock(tag.text);
+			// Convert to markdown code block if it is not already one
+			if (tag.text.match(/^\s*[~`]{3}/g)) {
+				return tag.text;
+			}
+			return '```\n' + tag.text + '\n```';
 	}
 
 	return tag.text;

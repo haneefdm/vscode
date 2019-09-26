@@ -3,15 +3,30 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { IIssueService } from 'vs/platform/issue/node/issue';
+import { IChannel } from 'vs/base/parts/ipc/common/ipc';
+import { IIssueService, IssueReporterData, ProcessExplorerData } from 'vs/platform/issue/common/issue';
 import { IMainProcessService } from 'vs/platform/ipc/electron-browser/mainProcessService';
-import { createChannelSender } from 'vs/base/parts/ipc/node/ipcChannelCreator';
+import { ServiceIdentifier } from 'vs/platform/instantiation/common/instantiation';
 
-export class IssueService {
+export class IssueService implements IIssueService {
 
-	_serviceBrand: undefined;
+	_serviceBrand: ServiceIdentifier<any>;
+
+	private channel: IChannel;
 
 	constructor(@IMainProcessService mainProcessService: IMainProcessService) {
-		return createChannelSender<IIssueService>(mainProcessService.getChannel('issue'));
+		this.channel = mainProcessService.getChannel('issue');
+	}
+
+	openReporter(data: IssueReporterData): Promise<void> {
+		return this.channel.call('openIssueReporter', data);
+	}
+
+	openProcessExplorer(data: ProcessExplorerData): Promise<void> {
+		return this.channel.call('openProcessExplorer', data);
+	}
+
+	getSystemStatus(): Promise<string> {
+		return this.channel.call('getSystemStatus');
 	}
 }

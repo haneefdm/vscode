@@ -14,7 +14,7 @@ import { VersionDependentRegistration } from '../utils/dependentRegistration';
 import TelemetryReporter from '../utils/telemetry';
 import * as typeConverters from '../utils/typeConverters';
 import FormattingOptionsManager from './fileConfigurationManager';
-import * as fileSchemes from '../utils/fileSchemes';
+import { file } from '../utils/fileSchemes';
 
 const localize = nls.loadMessageBundle();
 
@@ -30,15 +30,11 @@ class ApplyRefactoringCommand implements Command {
 
 	public async execute(
 		document: vscode.TextDocument,
+		file: string,
 		refactor: string,
 		action: string,
 		range: vscode.Range
 	): Promise<boolean> {
-		const file = this.client.toOpenedFilePath(document);
-		if (!file) {
-			return false;
-		}
-
 		/* __GDPR__
 			"refactor.execute" : {
 				"action" : { "classification": "PublicNonPersonalData", "purpose": "FeatureInsight" },
@@ -85,7 +81,7 @@ class ApplyRefactoringCommand implements Command {
 		const workspaceEdit = new vscode.WorkspaceEdit();
 		for (const edit of body.edits) {
 			const resource = this.client.toResource(edit.fileName);
-			if (resource.scheme === fileSchemes.file) {
+			if (resource.scheme === file) {
 				workspaceEdit.createFile(resource, { ignoreIfExists: true });
 			}
 		}
@@ -99,19 +95,15 @@ class SelectRefactorCommand implements Command {
 	public readonly id = SelectRefactorCommand.ID;
 
 	constructor(
-		private readonly client: ITypeScriptServiceClient,
 		private readonly doRefactoring: ApplyRefactoringCommand
 	) { }
 
 	public async execute(
 		document: vscode.TextDocument,
+		file: string,
 		info: Proto.ApplicableRefactorInfo,
 		range: vscode.Range
 	): Promise<boolean> {
-		const file = this.client.toOpenedFilePath(document);
-		if (!file) {
-			return false;
-		}
 		const selected = await vscode.window.showQuickPick(info.actions.map((action): vscode.QuickPickItem => ({
 			label: action.name,
 			description: action.description,
@@ -119,7 +111,7 @@ class SelectRefactorCommand implements Command {
 		if (!selected) {
 			return false;
 		}
-		return this.doRefactoring.execute(document, info.name, selected.label, range);
+		return this.doRefactoring.execute(document, file, info.name, selected.label, range);
 	}
 }
 
@@ -138,7 +130,7 @@ class TypeScriptRefactorProvider implements vscode.CodeActionProvider {
 		telemetryReporter: TelemetryReporter
 	) {
 		const doRefactoringCommand = commandManager.register(new ApplyRefactoringCommand(this.client, telemetryReporter));
-		commandManager.register(new SelectRefactorCommand(this.client, doRefactoringCommand));
+		commandManager.register(new SelectRefactorCommand(doRefactoringCommand));
 	}
 
 	public static readonly metadata: vscode.CodeActionProviderMetadata = {
@@ -154,30 +146,29 @@ class TypeScriptRefactorProvider implements vscode.CodeActionProvider {
 		if (!this.shouldTrigger(rangeOrSelection, context)) {
 			return undefined;
 		}
-		if (!this.client.toOpenedFilePath(document)) {
+
+		const file = this.client.toOpenedFilePath(document);
+		if (!file) {
 			return undefined;
 		}
 
+		const args: Proto.GetApplicableRefactorsRequestArgs = typeConverters.Range.toFileRangeRequestArgs(file, rangeOrSelection);
 		const response = await this.client.interruptGetErr(() => {
-			const file = this.client.toOpenedFilePath(document);
-			if (!file) {
-				return undefined;
-			}
 			this.formattingOptionsManager.ensureConfigurationForDocument(document, token);
 
-			const args: Proto.GetApplicableRefactorsRequestArgs = typeConverters.Range.toFileRangeRequestArgs(file, rangeOrSelection);
 			return this.client.execute('getApplicableRefactors', args, token);
 		});
-		if (!response || response.type !== 'response' || !response.body) {
+		if (response.type !== 'response' || !response.body) {
 			return undefined;
 		}
 
-		return this.convertApplicableRefactors(response.body, document, rangeOrSelection);
+		return this.convertApplicableRefactors(response.body, document, file, rangeOrSelection);
 	}
 
 	private convertApplicableRefactors(
 		body: Proto.ApplicableRefactorInfo[],
 		document: vscode.TextDocument,
+		file: string,
 		rangeOrSelection: vscode.Range | vscode.Selection
 	) {
 		const actions: vscode.CodeAction[] = [];
@@ -187,12 +178,12 @@ class TypeScriptRefactorProvider implements vscode.CodeActionProvider {
 				codeAction.command = {
 					title: info.description,
 					command: SelectRefactorCommand.ID,
-					arguments: [document, info, rangeOrSelection]
+					arguments: [document, file, info, rangeOrSelection]
 				};
 				actions.push(codeAction);
 			} else {
 				for (const action of info.actions) {
-					actions.push(this.refactorActionToCodeAction(action, document, info, rangeOrSelection));
+					actions.push(this.refactorActionToCodeAction(action, document, file, info, rangeOrSelection));
 				}
 			}
 		}
@@ -202,6 +193,7 @@ class TypeScriptRefactorProvider implements vscode.CodeActionProvider {
 	private refactorActionToCodeAction(
 		action: Proto.RefactorActionInfo,
 		document: vscode.TextDocument,
+		file: string,
 		info: Proto.ApplicableRefactorInfo,
 		rangeOrSelection: vscode.Range | vscode.Selection
 	) {
@@ -209,7 +201,7 @@ class TypeScriptRefactorProvider implements vscode.CodeActionProvider {
 		codeAction.command = {
 			title: action.description,
 			command: ApplyRefactoringCommand.ID,
-			arguments: [document, info.name, action.name, rangeOrSelection],
+			arguments: [document, file, info.name, action.name, rangeOrSelection],
 		};
 		codeAction.isPreferred = TypeScriptRefactorProvider.isPreferred(action);
 		return codeAction;

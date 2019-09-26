@@ -7,13 +7,14 @@ import { IChannel } from 'vs/base/parts/ipc/common/ipc';
 import { Event, Emitter } from 'vs/base/common/event';
 import { IUpdateService, State } from 'vs/platform/update/common/update';
 import { IMainProcessService } from 'vs/platform/ipc/electron-browser/mainProcessService';
+import { ServiceIdentifier } from 'vs/platform/instantiation/common/instantiation';
 
 export class UpdateService implements IUpdateService {
 
-	_serviceBrand: undefined;
+	_serviceBrand: ServiceIdentifier<any>;
 
-	private readonly _onStateChange = new Emitter<State>();
-	readonly onStateChange: Event<State> = this._onStateChange.event;
+	private _onStateChange = new Emitter<State>();
+	get onStateChange(): Event<State> { return this._onStateChange.event; }
 
 	private _state: State = State.Uninitialized;
 	get state(): State { return this._state; }

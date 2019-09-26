@@ -86,13 +86,13 @@ export interface IIPCOptions {
 
 export class Client implements IChannelClient, IDisposable {
 
-	private disposeDelayer: Delayer<void> | undefined;
+	private disposeDelayer: Delayer<void>;
 	private activeRequests = new Set<IDisposable>();
 	private child: ChildProcess | null;
 	private _client: IPCClient | null;
 	private channels = new Map<string, IChannel>();
 
-	private readonly _onDidProcessExit = new Emitter<{ code: number, signal: string }>();
+	private _onDidProcessExit = new Emitter<{ code: number, signal: string }>();
 	readonly onDidProcessExit = this._onDidProcessExit.event;
 
 	constructor(private modulePath: string, private options: IIPCOptions) {
@@ -137,7 +137,7 @@ export class Client implements IChannelClient, IDisposable {
 			cancellationTokenListener.dispose();
 			this.activeRequests.delete(disposable);
 
-			if (this.activeRequests.size === 0 && this.disposeDelayer) {
+			if (this.activeRequests.size === 0) {
 				this.disposeDelayer.trigger(() => this.disposeClient());
 			}
 		});
@@ -271,10 +271,8 @@ export class Client implements IChannelClient, IDisposable {
 
 	dispose() {
 		this._onDidProcessExit.dispose();
-		if (this.disposeDelayer) {
-			this.disposeDelayer.cancel();
-			this.disposeDelayer = undefined;
-		}
+		this.disposeDelayer.cancel();
+		this.disposeDelayer = null!; // StrictNullOverride: nulling out ok in dispose
 		this.disposeClient();
 		this.activeRequests.clear();
 	}

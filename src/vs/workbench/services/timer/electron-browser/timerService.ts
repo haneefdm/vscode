@@ -7,7 +7,7 @@ import { createDecorator } from 'vs/platform/instantiation/common/instantiation'
 import { virtualMachineHint } from 'vs/base/node/id';
 import * as perf from 'vs/base/common/performance';
 import * as os from 'os';
-import { IHostService } from 'vs/workbench/services/host/browser/host';
+import { IWindowsService } from 'vs/platform/windows/common/windows';
 import { IWorkbenchEnvironmentService } from 'vs/workbench/services/environment/common/environmentService';
 import { IWorkspaceContextService, WorkbenchState } from 'vs/platform/workspace/common/workspace';
 import { IExtensionService } from 'vs/workbench/services/extensions/common/extensions';
@@ -180,7 +180,7 @@ export interface IStartupMetrics {
 
 		/**
 		 * The time it took to create a new renderer (browser window) and to initialize that to the point
-		 * of load the main-bundle (`workbench.desktop.main.js`).
+		 * of load the main-bundle (`workbench.main.js`).
 		 *
 		 * * Happens in the main-process *and* the renderer-process
 		 * * Measured with the `main:loadWindow` and `willLoadWorkbenchMain` performance marks.
@@ -208,7 +208,7 @@ export interface IStartupMetrics {
 		readonly ellapsedWorkspaceServiceInit: number;
 
 		/**
-		 * The time it took to load the main-bundle of the workbench, e.g. `workbench.desktop.main.js`.
+		 * The time it took to load the main-bundle of the workbench, e.g. `workbench.main.js`.
 		 *
 		 * * Happens in the renderer-process
 		 * * Measured with the `willLoadWorkbenchMain` and `didLoadWorkbenchMain` performance marks.
@@ -297,18 +297,18 @@ export interface IStartupMetrics {
 }
 
 export interface ITimerService {
-	_serviceBrand: undefined;
+	_serviceBrand: any;
 	readonly startupMetrics: Promise<IStartupMetrics>;
 }
 
 class TimerService implements ITimerService {
 
-	_serviceBrand: undefined;
+	_serviceBrand: any;
 
-	private _startupMetrics?: Promise<IStartupMetrics>;
+	private _startupMetrics: Promise<IStartupMetrics>;
 
 	constructor(
-		@IHostService private readonly _hostService: IHostService,
+		@IWindowsService private readonly _windowsService: IWindowsService,
 		@IWorkbenchEnvironmentService private readonly _environmentService: IWorkbenchEnvironmentService,
 		@ILifecycleService private readonly _lifecycleService: ILifecycleService,
 		@IWorkspaceContextService private readonly _contextService: IWorkspaceContextService,
@@ -380,7 +380,7 @@ class TimerService implements ITimerService {
 			isLatestVersion: Boolean(await this._updateService.isLatestVersion()),
 			didUseCachedData: didUseCachedData(),
 			windowKind: this._lifecycleService.startupKind,
-			windowCount: await this._hostService.windowCount,
+			windowCount: await this._windowsService.getWindowCount(),
 			viewletId: activeViewlet ? activeViewlet.getId() : undefined,
 			editorIds: this._editorService.visibleEditors.map(input => input.getTypeId()),
 			panelId: activePanel ? activePanel.getId() : undefined,

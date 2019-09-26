@@ -4,10 +4,7 @@
 	"include": "./light_defaults.json",
 	"tokenColors": [
 		{
-			"scope": [
-				"meta.embedded",
-				"source.groovy.embedded"
-			],
+			"scope": ["meta.embedded", "source.groovy.embedded"],
 			"settings": {
 				"foreground": "#000000ff"
 			}
@@ -44,11 +41,7 @@
 		},
 		{
 			"scope": [
-				"constant.numeric",
-				"entity.name.operator.custom-literal.number",
-				"variable.other.enummember",
-				"keyword.operator.plus.exponent",
-				"keyword.operator.minus.exponent"
+				"constant.numeric"
 			],
 			"settings": {
 				"foreground": "#09885a"
@@ -168,10 +161,7 @@
 			}
 		},
 		{
-			"scope": [
-				"meta.preprocessor",
-				"keyword.control.directive"
-			],
+			"scope": "meta.preprocessor",
 			"settings": {
 				"foreground": "#0000ff"
 			}
@@ -207,19 +197,13 @@
 			}
 		},
 		{
-			"scope": [
-				"storage.modifier",
-				"keyword.operator.noexcept"
-			],
+			"scope": "storage.modifier",
 			"settings": {
 				"foreground": "#0000ff"
 			}
 		},
 		{
-			"scope": [
-				"string",
-				"entity.name.operator.custom-literal.string",
-			],
+			"scope": "string",
 			"settings": {
 				"foreground": "#a31515"
 			}
@@ -331,11 +315,8 @@
 				"keyword.operator.expression",
 				"keyword.operator.cast",
 				"keyword.operator.sizeof",
-				"keyword.operator.typeid",
-				"keyword.operator.alignas",
 				"keyword.operator.instanceof",
-				"keyword.operator.logical.python",
-				"keyword.operator.wordlike"
+				"keyword.operator.logical.python"
 			],
 			"settings": {
 				"foreground": "#0000ff"

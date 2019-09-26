@@ -11,6 +11,7 @@ import { SelectActionViewItem } from 'vs/base/browser/ui/actionbar/actionbar';
 import { IWorkbenchLayoutService } from 'vs/workbench/services/layout/browser/layoutService';
 import { IPanelService } from 'vs/workbench/services/panel/common/panelService';
 import { TogglePanelAction } from 'vs/workbench/browser/panel';
+import { IDisposable, dispose } from 'vs/base/common/lifecycle';
 import { attachSelectBoxStyler } from 'vs/platform/theme/common/styler';
 import { IThemeService } from 'vs/platform/theme/common/themeService';
 import { IContextViewService } from 'vs/platform/contextview/browser/contextView';
@@ -45,7 +46,7 @@ export class ClearOutputAction extends Action {
 		id: string, label: string,
 		@IOutputService private readonly outputService: IOutputService
 	) {
-		super(id, label, 'output-action codicon-clear-all');
+		super(id, label, 'output-action clear-output');
 	}
 
 	public run(): Promise<boolean> {
@@ -66,12 +67,15 @@ export class ToggleOrSetOutputScrollLockAction extends Action {
 	public static readonly ID = 'workbench.output.action.toggleOutputScrollLock';
 	public static readonly LABEL = nls.localize({ key: 'toggleOutputScrollLock', comment: ['Turn on / off automatic output scrolling'] }, "Toggle Output Scroll Lock");
 
-	constructor(id: string, label: string, @IOutputService private readonly outputService: IOutputService) {
-		super(id, label, 'output-action codicon-unlock');
-		this._register(this.outputService.onActiveOutputChannel(channel => {
+	private toDispose: IDisposable[] = [];
+
+	constructor(id: string, label: string,
+		@IOutputService private readonly outputService: IOutputService) {
+		super(id, label, 'output-action output-scroll-unlock');
+		this.toDispose.push(this.outputService.onActiveOutputChannel(channel => {
 			const activeChannel = this.outputService.getActiveChannel();
 			if (activeChannel) {
-				this.setClassAndLabel(activeChannel.scrollLock);
+				this.setClass(activeChannel.scrollLock);
 			}
 		}));
 	}
@@ -86,20 +90,23 @@ export class ToggleOrSetOutputScrollLockAction extends Action {
 			else {
 				activeChannel.scrollLock = !activeChannel.scrollLock;
 			}
-			this.setClassAndLabel(activeChannel.scrollLock);
+			this.setClass(activeChannel.scrollLock);
 		}
 
 		return Promise.resolve(true);
 	}
 
-	private setClassAndLabel(locked: boolean) {
+	private setClass(locked: boolean) {
 		if (locked) {
-			this.class = 'output-action codicon-lock';
-			this.label = nls.localize('outputScrollOn', "Turn Auto Scrolling On");
+			this.class = 'output-action output-scroll-lock';
 		} else {
-			this.class = 'output-action codicon-unlock';
-			this.label = nls.localize('outputScrollOff', "Turn Auto Scrolling Off");
+			this.class = 'output-action output-scroll-unlock';
 		}
+	}
+
+	public dispose() {
+		super.dispose();
+		this.toDispose = dispose(this.toDispose);
 	}
 }
 
@@ -122,8 +129,8 @@ export class SwitchOutputActionViewItem extends SelectActionViewItem {
 
 	private static readonly SEPARATOR = '─────────';
 
-	private outputChannels: IOutputChannelDescriptor[] = [];
-	private logChannels: IOutputChannelDescriptor[] = [];
+	private outputChannels: IOutputChannelDescriptor[];
+	private logChannels: IOutputChannelDescriptor[];
 
 	constructor(
 		action: IAction,
@@ -180,13 +187,15 @@ export class OpenLogOutputFile extends Action {
 	public static readonly ID = 'workbench.output.action.openLogOutputFile';
 	public static readonly LABEL = nls.localize('openInLogViewer', "Open Log File");
 
+	private disposables: IDisposable[] = [];
+
 	constructor(
 		@IOutputService private readonly outputService: IOutputService,
 		@IEditorService private readonly editorService: IEditorService,
 		@IInstantiationService private readonly instantiationService: IInstantiationService
 	) {
-		super(OpenLogOutputFile.ID, OpenLogOutputFile.LABEL, 'output-action codicon-go-to-file');
-		this._register(this.outputService.onActiveOutputChannel(this.update, this));
+		super(OpenLogOutputFile.ID, OpenLogOutputFile.LABEL, 'output-action open-log-file');
+		this.outputService.onActiveOutputChannel(this.update, this, this.disposables);
 		this.update();
 	}
 

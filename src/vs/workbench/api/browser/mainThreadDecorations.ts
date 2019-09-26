@@ -93,13 +93,14 @@ export class MainThreadDecorations implements MainThreadDecorationsShape {
 					if (!data) {
 						return undefined;
 					}
-					const [weight, bubble, tooltip, letter, themeColor] = data;
+					const [weight, bubble, tooltip, letter, themeColor, source] = data;
 					return <IDecorationData>{
 						weight: weight || 0,
 						bubble: bubble || false,
 						color: themeColor && themeColor.id,
 						tooltip,
-						letter
+						letter,
+						source,
 					};
 				});
 			}

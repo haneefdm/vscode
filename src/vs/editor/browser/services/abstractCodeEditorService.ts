@@ -13,7 +13,7 @@ import { IResourceInput } from 'vs/platform/editor/common/editor';
 
 export abstract class AbstractCodeEditorService extends Disposable implements ICodeEditorService {
 
-	_serviceBrand: undefined;
+	_serviceBrand: any;
 
 	private readonly _onCodeEditorAdd: Emitter<ICodeEditor> = this._register(new Emitter<ICodeEditor>());
 	public readonly onCodeEditorAdd: Event<ICodeEditor> = this._onCodeEditorAdd.event;
@@ -70,8 +70,8 @@ export abstract class AbstractCodeEditorService extends Disposable implements IC
 		return Object.keys(this._diffEditors).map(id => this._diffEditors[id]);
 	}
 
-	getFocusedCodeEditor(): ICodeEditor | undefined {
-		let editorWithWidgetFocus: ICodeEditor | undefined;
+	getFocusedCodeEditor(): ICodeEditor | null {
+		let editorWithWidgetFocus: ICodeEditor | null = null;
 
 		const editors = this.listCodeEditors();
 		for (const editor of editors) {
@@ -124,8 +124,8 @@ export abstract class AbstractCodeEditorService extends Disposable implements IC
 		delete this._transientWatchers[w.uri];
 	}
 
-	abstract getActiveCodeEditor(): ICodeEditor | undefined;
-	abstract openCodeEditor(input: IResourceInput, source: ICodeEditor | undefined, sideBySide?: boolean): Promise<ICodeEditor | undefined>;
+	abstract getActiveCodeEditor(): ICodeEditor | null;
+	abstract openCodeEditor(input: IResourceInput, source: ICodeEditor | null, sideBySide?: boolean): Promise<ICodeEditor | null>;
 }
 
 export class ModelTransientSettingWatcher {

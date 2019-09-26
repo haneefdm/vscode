@@ -1,34 +1,31 @@
 {
 	"comments": {
-		"blockComment": [ "<!--", "-->" ]
+		"lineComment": "",
+		"blockComment": ["<!--", "-->"]
 	},
 	"brackets": [
-		["<!--", "-->"],
-		["<", ">"],
-		["{", "}"],
-		["(", ")"]
+		["<", ">"]
 	],
 	"autoClosingPairs": [
-		{ "open": "{", "close": "}"},
-		{ "open": "[", "close": "]"},
-		{ "open": "(", "close": ")" },
-		{ "open": "'", "close": "'" },
-		{ "open": "\"", "close": "\"" },
-		{ "open": "<!--", "close": "-->", "notIn": [ "comment", "string" ]},
-		{ "open": "<![CDATA[", "close": "]]>", "notIn": [ "comment", "string" ]}
+		["<", ">"],
+		["'", "'"],
+		["\"", "\""]
 	],
 	"surroundingPairs": [
-		{ "open": "'", "close": "'" },
-		{ "open": "\"", "close": "\"" },
-		{ "open": "{", "close": "}"},
-		{ "open": "[", "close": "]"},
-		{ "open": "(", "close": ")" },
-		{ "open": "<", "close": ">" }
-	],
-	"folding": {
-		"markers": {
-			"start": "^\\s*<!--\\s*#region\\b.*-->",
-			"end": "^\\s*<!--\\s*#endregion\\b.*-->"
-		}
-	}
+		["<", ">"],
+		["'", "'"],
+		["\"", "\""]
+	]
+
+	// enhancedBrackets: [{
+	// 	tokenType: 'tag.tag-$1.xml',
+	// 	openTrigger: '>',
+	// 	open: /<(\w[\w\d]*)([^\/>]*(?!\/)>)[^<>]*$/i,
+	// 	closeComplete: '</$1>',
+	// 	closeTrigger: '>',
+	// 	close: /<\/(\w[\w\d]*)\s*>$/i
+	// }],
+
+	// autoClosingPairs:  [['\'', '\''], ['"', '"'] ]
+
 }

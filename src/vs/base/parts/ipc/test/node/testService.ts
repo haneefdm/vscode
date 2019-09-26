@@ -20,7 +20,7 @@ export interface ITestService {
 
 export class TestService implements ITestService {
 
-	private readonly _onMarco = new Emitter<IMarcoPoloEvent>();
+	private _onMarco = new Emitter<IMarcoPoloEvent>();
 	onMarco: Event<IMarcoPoloEvent> = this._onMarco.event;
 
 	marco(): Promise<string> {

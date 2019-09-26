@@ -5,6 +5,7 @@
 
 import { URI } from 'vs/base/common/uri';
 import { Action } from 'vs/base/common/actions';
+import { IWindowService, IWindowsService } from 'vs/platform/windows/common/windows';
 import * as nls from 'vs/nls';
 import * as browser from 'vs/base/browser/browser';
 import { IKeybindingService } from 'vs/platform/keybinding/common/keybinding';
@@ -14,38 +15,47 @@ import { IModelService } from 'vs/editor/common/services/modelService';
 import { IModeService } from 'vs/editor/common/services/modeService';
 import { IQuickInputService, IQuickInputButton } from 'vs/platform/quickinput/common/quickInput';
 import { getIconClasses } from 'vs/editor/common/services/getIconClasses';
+import product from 'vs/platform/product/node/product';
 import { ICommandHandler } from 'vs/platform/commands/common/commands';
 import { ServicesAccessor } from 'vs/platform/instantiation/common/instantiation';
 import { IConfigurationService } from 'vs/platform/configuration/common/configuration';
-import { IElectronService } from 'vs/platform/electron/node/electron';
-import { IElectronEnvironmentService } from 'vs/workbench/services/electron/electron-browser/electronEnvironmentService';
 
 export class CloseCurrentWindowAction extends Action {
 
 	static readonly ID = 'workbench.action.closeWindow';
 	static readonly LABEL = nls.localize('closeWindow', "Close Window");
 
-	constructor(
-		id: string,
-		label: string,
-		@IElectronService private readonly electronService: IElectronService
-	) {
+	constructor(id: string, label: string, @IWindowService private readonly windowService: IWindowService) {
 		super(id, label);
 	}
 
 	run(): Promise<boolean> {
-		this.electronService.closeWindow();
+		this.windowService.closeWindow();
 
 		return Promise.resolve(true);
 	}
 }
 
+export class NewWindowAction extends Action {
+
+	static readonly ID = 'workbench.action.newWindow';
+	static LABEL = nls.localize('newWindow', "New Window");
+
+	constructor(
+		id: string,
+		label: string,
+		@IWindowsService private readonly windowsService: IWindowsService
+	) {
+		super(id, label);
+	}
+
+	run(): Promise<void> {
+		return this.windowsService.openNewWindow();
+	}
+}
+
 export abstract class BaseZoomAction extends Action {
-
 	private static readonly SETTING_KEY = 'window.zoomLevel';
-
-	private static readonly MAX_ZOOM_LEVEL = 9;
-	private static readonly MIN_ZOOM_LEVEL = -8;
 
 	constructor(
 		id: string,
@@ -57,10 +67,6 @@ export abstract class BaseZoomAction extends Action {
 
 	protected async setConfiguredZoomLevel(level: number): Promise<void> {
 		level = Math.round(level); // when reaching smallest zoom, prevent fractional zoom levels
-
-		if (level > BaseZoomAction.MAX_ZOOM_LEVEL || level < BaseZoomAction.MIN_ZOOM_LEVEL) {
-			return; // https://github.com/microsoft/vscode/issues/48357
-		}
 
 		const applyZoom = () => {
 			webFrame.setZoomLevel(level);
@@ -137,21 +143,21 @@ export class ZoomResetAction extends BaseZoomAction {
 	}
 }
 
-export class RestartWithExtensionsDisabledAction extends Action {
+export class ReloadWindowWithExtensionsDisabledAction extends Action {
 
-	static readonly ID = 'workbench.action.restartWithExtensionsDisabled';
-	static LABEL = nls.localize('restartWithExtensionsDisabled', "Restart With Extensions Disabled");
+	static readonly ID = 'workbench.action.reloadWindowWithExtensionsDisabled';
+	static LABEL = nls.localize('reloadWindowWithExntesionsDisabled', "Reload Window With Extensions Disabled");
 
 	constructor(
 		id: string,
 		label: string,
-		@IElectronService private readonly electronService: IElectronService
+		@IWindowService private readonly windowService: IWindowService
 	) {
 		super(id, label);
 	}
 
 	async run(): Promise<boolean> {
-		await this.electronService.relaunch({ addArgs: ['--disable-extensions'] });
+		await this.windowService.reloadWindow({ _: [], 'disable-extensions': true });
 
 		return true;
 	}
@@ -167,22 +173,23 @@ export abstract class BaseSwitchWindow extends Action {
 	constructor(
 		id: string,
 		label: string,
-		private electronEnvironmentService: IElectronEnvironmentService,
+		private windowsService: IWindowsService,
+		private windowService: IWindowService,
 		private quickInputService: IQuickInputService,
 		private keybindingService: IKeybindingService,
 		private modelService: IModelService,
 		private modeService: IModeService,
-		private electronService: IElectronService
 	) {
 		super(id, label);
+
 	}
 
 	protected abstract isQuickNavigate(): boolean;
 
 	async run(): Promise<void> {
-		const currentWindowId = this.electronEnvironmentService.windowId;
+		const currentWindowId = this.windowService.windowId;
 
-		const windows = await this.electronService.getWindows();
+		const windows = await this.windowsService.getWindows();
 		const placeHolder = nls.localize('switchWindowPlaceHolder', "Select a window to switch to");
 		const picks = windows.map(win => {
 			const resource = win.filename ? URI.file(win.filename) : win.folderUri ? win.folderUri : win.workspace ? win.workspace.configPath : undefined;
@@ -203,13 +210,13 @@ export abstract class BaseSwitchWindow extends Action {
 			placeHolder,
 			quickNavigate: this.isQuickNavigate() ? { keybindings: this.keybindingService.lookupKeybindings(this.id) } : undefined,
 			onDidTriggerItemButton: async context => {
-				await this.electronService.closeWindow();
+				await this.windowsService.closeWindow(context.item.payload);
 				context.removeItem();
 			}
 		});
 
 		if (pick) {
-			this.electronService.focusWindow({ windowId: pick.payload });
+			this.windowsService.focusWindow(pick.payload);
 		}
 	}
 }
@@ -222,14 +229,14 @@ export class SwitchWindow extends BaseSwitchWindow {
 	constructor(
 		id: string,
 		label: string,
-		@IElectronEnvironmentService electronEnvironmentService: IElectronEnvironmentService,
+		@IWindowsService windowsService: IWindowsService,
+		@IWindowService windowService: IWindowService,
 		@IQuickInputService quickInputService: IQuickInputService,
 		@IKeybindingService keybindingService: IKeybindingService,
 		@IModelService modelService: IModelService,
 		@IModeService modeService: IModeService,
-		@IElectronService electronService: IElectronService
 	) {
-		super(id, label, electronEnvironmentService, quickInputService, keybindingService, modelService, modeService, electronService);
+		super(id, label, windowsService, windowService, quickInputService, keybindingService, modelService, modeService);
 	}
 
 	protected isQuickNavigate(): boolean {
@@ -245,14 +252,14 @@ export class QuickSwitchWindow extends BaseSwitchWindow {
 	constructor(
 		id: string,
 		label: string,
-		@IElectronEnvironmentService electronEnvironmentService: IElectronEnvironmentService,
+		@IWindowsService windowsService: IWindowsService,
+		@IWindowService windowService: IWindowService,
 		@IQuickInputService quickInputService: IQuickInputService,
 		@IKeybindingService keybindingService: IKeybindingService,
 		@IModelService modelService: IModelService,
 		@IModeService modeService: IModeService,
-		@IElectronService electronService: IElectronService
 	) {
-		super(id, label, electronEnvironmentService, quickInputService, keybindingService, modelService, modeService, electronService);
+		super(id, label, windowsService, windowService, quickInputService, keybindingService, modelService, modeService);
 	}
 
 	protected isQuickNavigate(): boolean {
@@ -260,26 +267,45 @@ export class QuickSwitchWindow extends BaseSwitchWindow {
 	}
 }
 
+
+export class ShowAboutDialogAction extends Action {
+
+	static readonly ID = 'workbench.action.showAboutDialog';
+	static LABEL = nls.localize('about', "About {0}", product.applicationName);
+
+	constructor(
+		id: string,
+		label: string,
+		@IWindowsService private readonly windowsService: IWindowsService
+	) {
+		super(id, label);
+	}
+
+	run(): Promise<void> {
+		return this.windowsService.openAboutDialog();
+	}
+}
+
 export const NewWindowTabHandler: ICommandHandler = function (accessor: ServicesAccessor) {
-	return accessor.get(IElectronService).newWindowTab();
+	return accessor.get(IWindowsService).newWindowTab();
 };
 
 export const ShowPreviousWindowTabHandler: ICommandHandler = function (accessor: ServicesAccessor) {
-	return accessor.get(IElectronService).showPreviousWindowTab();
+	return accessor.get(IWindowsService).showPreviousWindowTab();
 };
 
 export const ShowNextWindowTabHandler: ICommandHandler = function (accessor: ServicesAccessor) {
-	return accessor.get(IElectronService).showNextWindowTab();
+	return accessor.get(IWindowsService).showNextWindowTab();
 };
 
 export const MoveWindowTabToNewWindowHandler: ICommandHandler = function (accessor: ServicesAccessor) {
-	return accessor.get(IElectronService).moveWindowTabToNewWindow();
+	return accessor.get(IWindowsService).moveWindowTabToNewWindow();
 };
 
 export const MergeWindowTabsHandlerHandler: ICommandHandler = function (accessor: ServicesAccessor) {
-	return accessor.get(IElectronService).mergeAllWindowTabs();
+	return accessor.get(IWindowsService).mergeAllWindowTabs();
 };
 
 export const ToggleWindowTabsBarHandler: ICommandHandler = function (accessor: ServicesAccessor) {
-	return accessor.get(IElectronService).toggleWindowTabsBar();
+	return accessor.get(IWindowsService).toggleWindowTabsBar();
 };

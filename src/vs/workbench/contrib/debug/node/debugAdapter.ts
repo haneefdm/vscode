@@ -27,9 +27,9 @@ export abstract class StreamDebugAdapter extends AbstractDebugAdapter {
 	private static readonly HEADER_LINESEPARATOR = /\r?\n/;	// allow for non-RFC 2822 conforming line separators
 	private static readonly HEADER_FIELDSEPARATOR = /: */;
 
-	private outputStream!: stream.Writable;
-	private rawData = Buffer.allocUnsafe(0);
-	private contentLength = -1;
+	private outputStream: stream.Writable;
+	private rawData: Buffer;
+	private contentLength: number;
 
 	constructor() {
 		super();
@@ -127,8 +127,11 @@ export class SocketDebugAdapter extends StreamDebugAdapter {
 		});
 	}
 
-	async stopSession(): Promise<void> {
-		await this.cancelPendingRequests();
+	stopSession(): Promise<void> {
+
+		// Cancel all sent promises on disconnect so debug trees are not left in a broken state #3666.
+		this.cancelPending();
+
 		if (this.socket) {
 			this.socket.end();
 			this.socket = undefined;
@@ -142,7 +145,7 @@ export class SocketDebugAdapter extends StreamDebugAdapter {
 */
 export class ExecutableDebugAdapter extends StreamDebugAdapter {
 
-	private serverProcess: cp.ChildProcess | undefined;
+	private serverProcess: cp.ChildProcess;
 
 	constructor(private adapterExecutable: IDebugAdapterExecutable, private debugType: string, private readonly outputService?: IOutputService) {
 		super();
@@ -249,7 +252,10 @@ export class ExecutableDebugAdapter extends StreamDebugAdapter {
 		}
 	}
 
-	async stopSession(): Promise<void> {
+	stopSession(): Promise<void> {
+
+		// Cancel all sent promises on disconnect so debug trees are not left in a broken state #3666.
+		this.cancelPending();
 
 		if (!this.serverProcess) {
 			return Promise.resolve(undefined);
@@ -258,10 +264,9 @@ export class ExecutableDebugAdapter extends StreamDebugAdapter {
 		// when killing a process in windows its child
 		// processes are *not* killed but become root
 		// processes. Therefore we use TASKKILL.EXE
-		await this.cancelPendingRequests();
 		if (platform.isWindows) {
 			return new Promise<void>((c, e) => {
-				const killer = cp.exec(`taskkill /F /T /PID ${this.serverProcess!.pid}`, function (err, stdout, stderr) {
+				const killer = cp.exec(`taskkill /F /T /PID ${this.serverProcess.pid}`, function (err, stdout, stderr) {
 					if (err) {
 						return e(err);
 					}

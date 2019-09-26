@@ -31,7 +31,6 @@ function extractEditor(options) {
     let compilerOptions;
     if (tsConfig.extends) {
         compilerOptions = Object.assign({}, require(path.join(options.sourcesRoot, tsConfig.extends)).compilerOptions, tsConfig.compilerOptions);
-        delete tsConfig.extends;
     }
     else {
         compilerOptions = tsConfig.compilerOptions;
@@ -41,9 +40,9 @@ function extractEditor(options) {
     compilerOptions.noUnusedLocals = false;
     compilerOptions.preserveConstEnums = false;
     compilerOptions.declaration = false;
+    compilerOptions.noImplicitAny = false;
     compilerOptions.moduleResolution = ts.ModuleResolutionKind.Classic;
     options.compilerOptions = compilerOptions;
-    console.log(`Running with shakeLevel ${tss.toStringShakeLevel(options.shakeLevel)}`);
     let result = tss.shake(options);
     for (let fileName in result) {
         if (result.hasOwnProperty(fileName)) {
@@ -92,6 +91,8 @@ function extractEditor(options) {
     }
     delete tsConfig.compilerOptions.moduleResolution;
     writeOutputFile('tsconfig.json', JSON.stringify(tsConfig, null, '\t'));
+    const tsConfigBase = JSON.parse(fs.readFileSync(path.join(options.sourcesRoot, 'tsconfig.base.json')).toString());
+    writeOutputFile('tsconfig.base.json', JSON.stringify(tsConfigBase, null, '\t'));
     [
         'vs/css.build.js',
         'vs/css.d.ts',
@@ -130,7 +131,7 @@ function createESMSourcesAndResources2(options) {
             write(getDestAbsoluteFilePath(file), JSON.stringify(tsConfig, null, '\t'));
             continue;
         }
-        if (/\.d\.ts$/.test(file) || /\.css$/.test(file) || /\.js$/.test(file) || /\.ttf$/.test(file)) {
+        if (/\.d\.ts$/.test(file) || /\.css$/.test(file) || /\.js$/.test(file)) {
             // Transport the files directly
             write(getDestAbsoluteFilePath(file), fs.readFileSync(path.join(SRC_FOLDER, file)));
             continue;
@@ -250,37 +251,35 @@ function transportCSS(module, enqueue, write) {
     const filename = path.join(SRC_DIR, module);
     const fileContents = fs.readFileSync(filename).toString();
     const inlineResources = 'base64'; // see https://github.com/Microsoft/monaco-editor/issues/148
-    const newContents = _rewriteOrInlineUrls(fileContents, inlineResources === 'base64');
+    const inlineResourcesLimit = 300000; //3000; // see https://github.com/Microsoft/monaco-editor/issues/336
+    const newContents = _rewriteOrInlineUrls(fileContents, inlineResources === 'base64', inlineResourcesLimit);
     write(module, newContents);
     return true;
-    function _rewriteOrInlineUrls(contents, forceBase64) {
+    function _rewriteOrInlineUrls(contents, forceBase64, inlineByteLimit) {
         return _replaceURL(contents, (url) => {
-            const fontMatch = url.match(/^(.*).ttf\?(.*)$/);
-            if (fontMatch) {
-                const relativeFontPath = `${fontMatch[1]}.ttf`; // trim the query parameter
-                const fontPath = path.join(path.dirname(module), relativeFontPath);
-                enqueue(fontPath);
-                return relativeFontPath;
-            }
-            const imagePath = path.join(path.dirname(module), url);
-            const fileContents = fs.readFileSync(path.join(SRC_DIR, imagePath));
-            const MIME = /\.svg$/.test(url) ? 'image/svg+xml' : 'image/png';
-            let DATA = ';base64,' + fileContents.toString('base64');
-            if (!forceBase64 && /\.svg$/.test(url)) {
-                // .svg => url encode as explained at https://codepen.io/tigt/post/optimizing-svgs-in-data-uris
-                let newText = fileContents.toString()
-                    .replace(/"/g, '\'')
-                    .replace(/</g, '%3C')
-                    .replace(/>/g, '%3E')
-                    .replace(/&/g, '%26')
-                    .replace(/#/g, '%23')
-                    .replace(/\s+/g, ' ');
-                let encodedData = ',' + newText;
-                if (encodedData.length < DATA.length) {
-                    DATA = encodedData;
+            let imagePath = path.join(path.dirname(module), url);
+            let fileContents = fs.readFileSync(path.join(SRC_DIR, imagePath));
+            if (fileContents.length < inlineByteLimit) {
+                const MIME = /\.svg$/.test(url) ? 'image/svg+xml' : 'image/png';
+                let DATA = ';base64,' + fileContents.toString('base64');
+                if (!forceBase64 && /\.svg$/.test(url)) {
+                    // .svg => url encode as explained at https://codepen.io/tigt/post/optimizing-svgs-in-data-uris
+                    let newText = fileContents.toString()
+                        .replace(/"/g, '\'')
+                        .replace(/</g, '%3C')
+                        .replace(/>/g, '%3E')
+                        .replace(/&/g, '%26')
+                        .replace(/#/g, '%23')
+                        .replace(/\s+/g, ' ');
+                    let encodedData = ',' + newText;
+                    if (encodedData.length < DATA.length) {
+                        DATA = encodedData;
+                    }
                 }
+                return '"data:' + MIME + DATA + '"';
             }
-            return '"data:' + MIME + DATA + '"';
+            enqueue(imagePath);
+            return url;
         });
     }
     function _replaceURL(contents, replacer) {

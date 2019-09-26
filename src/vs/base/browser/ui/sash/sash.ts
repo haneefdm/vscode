@@ -61,7 +61,7 @@ export class Sash extends Disposable {
 	private el: HTMLElement;
 	private layoutProvider: ISashLayoutProvider;
 	private hidden: boolean;
-	private orientation!: Orientation;
+	private orientation: Orientation;
 
 	private _state: SashState = SashState.Enabled;
 	get state(): SashState { return this._state; }
@@ -143,7 +143,7 @@ export class Sash extends Disposable {
 		this._register(domEvent(this.el, EventType.Start)(this.onTouchStart, this));
 
 		if (isIPad) {
-			// see also https://ux.stackexchange.com/questions/39023/what-is-the-optimum-button-size-of-touch-screen-applications
+			// see also http://ux.stackexchange.com/questions/39023/what-is-the-optimum-button-size-of-touch-screen-applications
 			addClass(this.el, 'touch');
 		}
 
@@ -179,8 +179,27 @@ export class Sash extends Disposable {
 
 		let isMultisashResize = false;
 
+		if (this.linkedSash && !(e as any).__linkedSashEvent) {
+			(e as any).__linkedSashEvent = true;
+			this.linkedSash.onMouseDown(e);
+		}
+
 		if (!(e as any).__orthogonalSashEvent) {
-			const orthogonalSash = this.getOrthogonalSash(e);
+			let orthogonalSash: Sash | undefined;
+
+			if (this.orientation === Orientation.VERTICAL) {
+				if (e.offsetY <= 4) {
+					orthogonalSash = this.orthogonalStartSash;
+				} else if (e.offsetY >= this.el.clientHeight - 4) {
+					orthogonalSash = this.orthogonalEndSash;
+				}
+			} else {
+				if (e.offsetX <= 4) {
+					orthogonalSash = this.orthogonalStartSash;
+				} else if (e.offsetX >= this.el.clientWidth - 4) {
+					orthogonalSash = this.orthogonalEndSash;
+				}
+			}
 
 			if (orthogonalSash) {
 				isMultisashResize = true;
@@ -189,22 +208,11 @@ export class Sash extends Disposable {
 			}
 		}
 
-		if (this.linkedSash && !(e as any).__linkedSashEvent) {
-			(e as any).__linkedSashEvent = true;
-			this.linkedSash.onMouseDown(e);
-		}
-
 		if (!this.state) {
 			return;
 		}
 
-		// Select both iframes and webviews; internally Electron nests an iframe
-		// in its <webview> component, but this isn't queryable.
-		const iframes = [
-			...getElementsByTagName('iframe'),
-			...getElementsByTagName('webview'),
-		];
-
+		const iframes = getElementsByTagName('iframe');
 		for (const iframe of iframes) {
 			iframe.style.pointerEvents = 'none'; // disable mouse events on iframes as long as we drag the sash
 		}
@@ -246,7 +254,7 @@ export class Sash extends Disposable {
 			style.innerHTML = `* { cursor: ${cursor} !important; }`;
 		};
 
-		const disposables = new DisposableStore();
+		const disposables: IDisposable[] = [];
 
 		updateStyle();
 
@@ -270,8 +278,9 @@ export class Sash extends Disposable {
 			removeClass(this.el, 'active');
 			this._onDidEnd.fire();
 
-			disposables.dispose();
+			dispose(disposables);
 
+			const iframes = getElementsByTagName('iframe');
 			for (const iframe of iframes) {
 				iframe.style.pointerEvents = 'auto';
 			}
@@ -281,17 +290,7 @@ export class Sash extends Disposable {
 		domEvent(window, 'mouseup')(onMouseUp, null, disposables);
 	}
 
-	private onMouseDoubleClick(e: MouseEvent): void {
-		const orthogonalSash = this.getOrthogonalSash(e);
-
-		if (orthogonalSash) {
-			orthogonalSash._onDidReset.fire();
-		}
-
-		if (this.linkedSash) {
-			this.linkedSash._onDidReset.fire();
-		}
-
+	private onMouseDoubleClick(event: MouseEvent): void {
 		this._onDidReset.fire();
 	}
 
@@ -382,26 +381,13 @@ export class Sash extends Disposable {
 		toggleClass(this.el, 'orthogonal-end', state !== SashState.Disabled);
 	}
 
-	private getOrthogonalSash(e: MouseEvent): Sash | undefined {
-		if (this.orientation === Orientation.VERTICAL) {
-			if (e.offsetY <= 4) {
-				return this.orthogonalStartSash;
-			} else if (e.offsetY >= this.el.clientHeight - 4) {
-				return this.orthogonalEndSash;
-			}
-		} else {
-			if (e.offsetX <= 4) {
-				return this.orthogonalStartSash;
-			} else if (e.offsetX >= this.el.clientWidth - 4) {
-				return this.orthogonalEndSash;
-			}
-		}
-
-		return undefined;
-	}
-
 	dispose(): void {
 		super.dispose();
-		this.el.remove();
+
+		if (this.el && this.el.parentElement) {
+			this.el.parentElement.removeChild(this.el);
+		}
+
+		this.el = null!; // StrictNullOverride: nulling out ok in dispose
 	}
 }

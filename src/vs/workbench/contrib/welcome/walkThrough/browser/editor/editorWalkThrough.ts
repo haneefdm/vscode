@@ -3,13 +3,12 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import 'vs/workbench/contrib/welcome/walkThrough/browser/editor/vs_code_editor_walkthrough';
 import { localize } from 'vs/nls';
 import { IEditorService } from 'vs/workbench/services/editor/common/editorService';
 import { Action } from 'vs/base/common/actions';
 import { IInstantiationService } from 'vs/platform/instantiation/common/instantiation';
 import { URI } from 'vs/base/common/uri';
-import { WalkThroughInput, WalkThroughInputOptions } from 'vs/workbench/contrib/welcome/walkThrough/browser/walkThroughInput';
+import { WalkThroughInput, WalkThroughInputOptions } from 'vs/workbench/contrib/welcome/walkThrough/common/walkThroughInput';
 import { Schemas } from 'vs/base/common/network';
 import { IEditorInputFactory, EditorInput } from 'vs/workbench/common/editor';
 
@@ -18,10 +17,7 @@ const inputOptions: WalkThroughInputOptions = {
 	typeId,
 	name: localize('editorWalkThrough.title', "Interactive Playground"),
 	resource: URI.parse(require.toUrl('./vs_code_editor_walkthrough.md'))
-		.with({
-			scheme: Schemas.walkThrough,
-			query: JSON.stringify({ moduleId: 'vs/workbench/contrib/welcome/walkThrough/browser/editor/vs_code_editor_walkthrough' })
-		}),
+		.with({ scheme: Schemas.walkThrough }),
 	telemetryFrom: 'walkThrough'
 };
 

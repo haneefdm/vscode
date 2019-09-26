@@ -20,24 +20,6 @@ import { KeybindingWeight } from 'vs/platform/keybinding/common/keybindingsRegis
 import { ILogService } from 'vs/platform/log/common/log';
 import { SnippetSession } from './snippetSession';
 
-export interface ISnippetInsertOptions {
-	overwriteBefore: number;
-	overwriteAfter: number;
-	adjustWhitespace: boolean;
-	undoStopBefore: boolean;
-	undoStopAfter: boolean;
-	clipboardText: string | undefined;
-}
-
-const _defaultOptions: ISnippetInsertOptions = {
-	overwriteBefore: 0,
-	overwriteAfter: 0,
-	undoStopBefore: true,
-	undoStopAfter: true,
-	adjustWhitespace: true,
-	clipboardText: undefined
-};
-
 export class SnippetController2 implements IEditorContribution {
 
 	static get(editor: ICodeEditor): SnippetController2 {
@@ -54,7 +36,7 @@ export class SnippetController2 implements IEditorContribution {
 
 	private _session?: SnippetSession;
 	private _snippetListener = new DisposableStore();
-	private _modelVersionId: number = -1;
+	private _modelVersionId: number;
 	private _currentChoice?: Choice;
 
 	constructor(
@@ -81,13 +63,15 @@ export class SnippetController2 implements IEditorContribution {
 
 	insert(
 		template: string,
-		opts?: Partial<ISnippetInsertOptions>
+		overwriteBefore: number = 0, overwriteAfter: number = 0,
+		undoStopBefore: boolean = true, undoStopAfter: boolean = true,
+		adjustWhitespace: boolean = true,
 	): void {
 		// this is here to find out more about the yet-not-understood
 		// error that sometimes happens when we fail to inserted a nested
 		// snippet
 		try {
-			this._doInsert(template, typeof opts === 'undefined' ? _defaultOptions : { ..._defaultOptions, ...opts });
+			this._doInsert(template, overwriteBefore, overwriteAfter, undoStopBefore, undoStopAfter, adjustWhitespace);
 
 		} catch (e) {
 			this.cancel();
@@ -100,7 +84,9 @@ export class SnippetController2 implements IEditorContribution {
 
 	private _doInsert(
 		template: string,
-		opts: ISnippetInsertOptions
+		overwriteBefore: number = 0, overwriteAfter: number = 0,
+		undoStopBefore: boolean = true, undoStopAfter: boolean = true,
+		adjustWhitespace: boolean = true,
 	): void {
 		if (!this._editor.hasModel()) {
 			return;
@@ -110,19 +96,19 @@ export class SnippetController2 implements IEditorContribution {
 		// as that is the inflight state causing cancelation
 		this._snippetListener.clear();
 
-		if (opts.undoStopBefore) {
+		if (undoStopBefore) {
 			this._editor.getModel().pushStackElement();
 		}
 
 		if (!this._session) {
 			this._modelVersionId = this._editor.getModel().getAlternativeVersionId();
-			this._session = new SnippetSession(this._editor, template, opts);
+			this._session = new SnippetSession(this._editor, template, overwriteBefore, overwriteAfter, adjustWhitespace);
 			this._session.insert();
 		} else {
-			this._session.merge(template, opts);
+			this._session.merge(template, overwriteBefore, overwriteAfter, adjustWhitespace);
 		}
 
-		if (opts.undoStopAfter) {
+		if (undoStopAfter) {
 			this._editor.getModel().pushStackElement();
 		}
 
@@ -210,7 +196,7 @@ export class SnippetController2 implements IEditorContribution {
 		this._inSnippet.reset();
 		this._hasPrevTabstop.reset();
 		this._hasNextTabstop.reset();
-		this._snippetListener.clear();
+		dispose(this._snippetListener);
 		dispose(this._session);
 		this._session = undefined;
 		this._modelVersionId = -1;

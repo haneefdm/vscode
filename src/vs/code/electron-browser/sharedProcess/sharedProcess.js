@@ -14,7 +14,6 @@ bootstrap.avoidMonkeyPatchFromAppInsights();
 
 bootstrapWindow.load(['vs/code/electron-browser/sharedProcess/sharedProcessMain'], function (sharedProcess, configuration) {
 	sharedProcess.startup({
-		machineId: configuration.machineId,
-		windowId: configuration.windowId
+		machineId: configuration.machineId
 	});
 });

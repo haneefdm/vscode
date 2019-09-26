@@ -5,31 +5,25 @@
 
 import { IEnvironmentService } from 'vs/platform/environment/common/environment';
 import { IWindowConfiguration } from 'vs/platform/windows/common/windows';
-import { IRemoteAgentConnection, IRemoteAgentService } from 'vs/workbench/services/remote/common/remoteAgentService';
+import { IRemoteAgentConnection } from 'vs/workbench/services/remote/common/remoteAgentService';
 import { IRemoteAuthorityResolverService } from 'vs/platform/remote/common/remoteAuthorityResolver';
-import product from 'vs/platform/product/common/product';
-import { nodeSocketFactory } from 'vs/platform/remote/node/nodeSocketFactory';
+import product from 'vs/platform/product/node/product';
+import { nodeWebSocketFactory } from 'vs/platform/remote/node/nodeWebSocketFactory';
 import { AbstractRemoteAgentService, RemoteAgentConnection } from 'vs/workbench/services/remote/common/abstractRemoteAgentService';
 import { ISignService } from 'vs/platform/sign/common/sign';
-import { ISocketFactory } from 'vs/platform/remote/common/remoteAgentConnection';
-import { ILogService } from 'vs/platform/log/common/log';
 
-export class RemoteAgentService extends AbstractRemoteAgentService implements IRemoteAgentService {
-
-	public readonly socketFactory: ISocketFactory;
+export class RemoteAgentService extends AbstractRemoteAgentService {
 
 	private readonly _connection: IRemoteAgentConnection | null = null;
 
 	constructor({ remoteAuthority }: IWindowConfiguration,
 		@IEnvironmentService environmentService: IEnvironmentService,
 		@IRemoteAuthorityResolverService remoteAuthorityResolverService: IRemoteAuthorityResolverService,
-		@ISignService signService: ISignService,
-		@ILogService logService: ILogService
+		@ISignService signService: ISignService
 	) {
 		super(environmentService);
-		this.socketFactory = nodeSocketFactory;
 		if (remoteAuthority) {
-			this._connection = this._register(new RemoteAgentConnection(remoteAuthority, product.commit, nodeSocketFactory, remoteAuthorityResolverService, signService, logService));
+			this._connection = this._register(new RemoteAgentConnection(remoteAuthority, product.commit, nodeWebSocketFactory, environmentService, remoteAuthorityResolverService, signService));
 		}
 	}
 

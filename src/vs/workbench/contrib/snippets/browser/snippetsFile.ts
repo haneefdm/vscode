@@ -13,67 +13,11 @@ import { isFalsyOrWhitespace } from 'vs/base/common/strings';
 import { URI } from 'vs/base/common/uri';
 import { IFileService } from 'vs/platform/files/common/files';
 import { IExtensionDescription } from 'vs/platform/extensions/common/extensions';
-import { IdleValue } from 'vs/base/common/async';
-
-class SnippetBodyInsights {
-
-	readonly codeSnippet: string;
-	readonly isBogous: boolean;
-	readonly needsClipboard: boolean;
-
-	constructor(body: string) {
-
-		// init with defaults
-		this.isBogous = false;
-		this.needsClipboard = false;
-		this.codeSnippet = body;
-
-		// check snippet...
-		const textmateSnippet = new SnippetParser().parse(body, false);
-
-		let placeholders = new Map<string, number>();
-		let placeholderMax = 0;
-		for (const placeholder of textmateSnippet.placeholders) {
-			placeholderMax = Math.max(placeholderMax, placeholder.index);
-		}
-
-		let stack = [...textmateSnippet.children];
-		while (stack.length > 0) {
-			const marker = stack.shift()!;
-			if (marker instanceof Variable) {
-
-				if (marker.children.length === 0 && !KnownSnippetVariableNames[marker.name]) {
-					// a 'variable' without a default value and not being one of our supported
-					// variables is automatically turned into a placeholder. This is to restore
-					// a bug we had before. So `${foo}` becomes `${N:foo}`
-					const index = placeholders.has(marker.name) ? placeholders.get(marker.name)! : ++placeholderMax;
-					placeholders.set(marker.name, index);
-
-					const synthetic = new Placeholder(index).appendChild(new Text(marker.name));
-					textmateSnippet.replace(marker, [synthetic]);
-					this.isBogous = true;
-				}
-
-				if (marker.name === 'CLIPBOARD') {
-					this.needsClipboard = true;
-				}
-
-			} else {
-				// recurse
-				stack.push(...marker.children);
-			}
-		}
-
-		if (this.isBogous) {
-			this.codeSnippet = textmateSnippet.toTextmateString();
-		}
-
-	}
-}
 
 export class Snippet {
 
-	private readonly _bodyInsights: IdleValue<SnippetBodyInsights>;
+	private _codeSnippet: string;
+	private _isBogous: boolean;
 
 	readonly prefixLow: string;
 
@@ -88,19 +32,29 @@ export class Snippet {
 	) {
 		//
 		this.prefixLow = prefix ? prefix.toLowerCase() : prefix;
-		this._bodyInsights = new IdleValue(() => new SnippetBodyInsights(this.body));
 	}
 
 	get codeSnippet(): string {
-		return this._bodyInsights.getValue().codeSnippet;
+		this._ensureCodeSnippet();
+		return this._codeSnippet;
 	}
 
 	get isBogous(): boolean {
-		return this._bodyInsights.getValue().isBogous;
+		this._ensureCodeSnippet();
+		return this._isBogous;
 	}
 
-	get needsClipboard(): boolean {
-		return this._bodyInsights.getValue().needsClipboard;
+	private _ensureCodeSnippet() {
+		if (!this._codeSnippet) {
+			const rewrite = Snippet._rewriteBogousVariables(this.body);
+			if (typeof rewrite === 'string') {
+				this._codeSnippet = rewrite;
+				this._isBogous = true;
+			} else {
+				this._codeSnippet = this.body;
+				this._isBogous = false;
+			}
+		}
 	}
 
 	static compare(a: Snippet, b: Snippet): number {
@@ -114,6 +68,49 @@ export class Snippet {
 			return -1;
 		} else {
 			return 0;
+		}
+	}
+
+	static _rewriteBogousVariables(template: string): false | string {
+		const textmateSnippet = new SnippetParser().parse(template, false);
+
+		let placeholders = new Map<string, number>();
+		let placeholderMax = 0;
+		for (const placeholder of textmateSnippet.placeholders) {
+			placeholderMax = Math.max(placeholderMax, placeholder.index);
+		}
+
+		let didChange = false;
+		let stack = [...textmateSnippet.children];
+
+		while (stack.length > 0) {
+			const marker = stack.shift()!;
+
+			if (
+				marker instanceof Variable
+				&& marker.children.length === 0
+				&& !KnownSnippetVariableNames[marker.name]
+			) {
+				// a 'variable' without a default value and not being one of our supported
+				// variables is automatically turned into a placeholder. This is to restore
+				// a bug we had before. So `${foo}` becomes `${N:foo}`
+				const index = placeholders.has(marker.name) ? placeholders.get(marker.name)! : ++placeholderMax;
+				placeholders.set(marker.name, index);
+
+				const synthetic = new Placeholder(index).appendChild(new Text(marker.name));
+				textmateSnippet.replace(marker, [synthetic]);
+				didChange = true;
+
+			} else {
+				// recurse
+				stack.push(...marker.children);
+			}
+		}
+
+		if (!didChange) {
+			return false;
+		} else {
+			return textmateSnippet.toTextmateString();
 		}
 	}
 }

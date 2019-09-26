@@ -11,7 +11,7 @@ import { IDisposable, DisposableStore } from 'vs/base/common/lifecycle';
 import { IEmptyContentData } from 'vs/editor/browser/controller/mouseTarget';
 import { ICodeEditor, IEditorMouseEvent, MouseTargetType } from 'vs/editor/browser/editorBrowser';
 import { EditorAction, ServicesAccessor, registerEditorAction, registerEditorContribution } from 'vs/editor/browser/editorExtensions';
-import { ConfigurationChangedEvent, EditorOption } from 'vs/editor/common/config/editorOptions';
+import { IConfigurationChangedEvent } from 'vs/editor/common/config/editorOptions';
 import { Range } from 'vs/editor/common/core/range';
 import { IEditorContribution, IScrollEvent } from 'vs/editor/common/editorCommon';
 import { EditorContextKeys } from 'vs/editor/common/editorContextKeys';
@@ -25,6 +25,9 @@ import { editorHoverBackground, editorHoverBorder, editorHoverHighlight, textCod
 import { IThemeService, registerThemingParticipant } from 'vs/platform/theme/common/themeService';
 import { IMarkerDecorationsService } from 'vs/editor/common/services/markersDecorationService';
 import { IKeybindingService } from 'vs/platform/keybinding/common/keybinding';
+import { IContextMenuService } from 'vs/platform/contextview/browser/contextView';
+import { IBulkEditService } from 'vs/editor/browser/services/bulkEditService';
+import { ICommandService } from 'vs/platform/commands/common/commands';
 import { AccessibilitySupport } from 'vs/platform/accessibility/common/accessibility';
 
 export class ModesHoverController implements IEditorContribution {
@@ -34,27 +37,27 @@ export class ModesHoverController implements IEditorContribution {
 	private readonly _toUnhook = new DisposableStore();
 	private readonly _didChangeConfigurationHandler: IDisposable;
 
-	private _contentWidget: ModesContentHoverWidget | null;
-	private _glyphWidget: ModesGlyphHoverWidget | null;
+	private _contentWidget: ModesContentHoverWidget;
+	private _glyphWidget: ModesGlyphHoverWidget;
 
 	get contentWidget(): ModesContentHoverWidget {
 		if (!this._contentWidget) {
-			this._createHoverWidgets();
+			this._createHoverWidget();
 		}
-		return this._contentWidget!;
+		return this._contentWidget;
 	}
 
 	get glyphWidget(): ModesGlyphHoverWidget {
 		if (!this._glyphWidget) {
-			this._createHoverWidgets();
+			this._createHoverWidget();
 		}
-		return this._glyphWidget!;
+		return this._glyphWidget;
 	}
 
 	private _isMouseDown: boolean;
 	private _hoverClicked: boolean;
-	private _isHoverEnabled!: boolean;
-	private _isHoverSticky!: boolean;
+	private _isHoverEnabled: boolean;
+	private _isHoverSticky: boolean;
 
 	static get(editor: ICodeEditor): ModesHoverController {
 		return editor.getContribution<ModesHoverController>(ModesHoverController.ID);
@@ -65,17 +68,18 @@ export class ModesHoverController implements IEditorContribution {
 		@IModeService private readonly _modeService: IModeService,
 		@IMarkerDecorationsService private readonly _markerDecorationsService: IMarkerDecorationsService,
 		@IKeybindingService private readonly _keybindingService: IKeybindingService,
+		@IContextMenuService private readonly _contextMenuService: IContextMenuService,
+		@IBulkEditService private readonly _bulkEditService: IBulkEditService,
+		@ICommandService private readonly _commandService: ICommandService,
 		@IThemeService private readonly _themeService: IThemeService
 	) {
 		this._isMouseDown = false;
 		this._hoverClicked = false;
-		this._contentWidget = null;
-		this._glyphWidget = null;
 
 		this._hookEvents();
 
-		this._didChangeConfigurationHandler = this._editor.onDidChangeConfiguration((e: ConfigurationChangedEvent) => {
-			if (e.hasChanged(EditorOption.hover)) {
+		this._didChangeConfigurationHandler = this._editor.onDidChangeConfiguration((e: IConfigurationChangedEvent) => {
+			if (e.contribInfo) {
 				this._hideWidgets();
 				this._unhookEvents();
 				this._hookEvents();
@@ -86,7 +90,7 @@ export class ModesHoverController implements IEditorContribution {
 	private _hookEvents(): void {
 		const hideWidgetsEventHandler = () => this._hideWidgets();
 
-		const hoverOpts = this._editor.getOption(EditorOption.hover);
+		const hoverOpts = this._editor.getConfiguration().contribInfo.hover;
 		this._isHoverEnabled = hoverOpts.enabled;
 		this._isHoverSticky = hoverOpts.sticky;
 		if (this._isHoverEnabled) {
@@ -147,6 +151,7 @@ export class ModesHoverController implements IEditorContribution {
 	}
 
 	private _onEditorMouseMove(mouseEvent: IEditorMouseEvent): void {
+		// const this._editor.getConfiguration().contribInfo.hover.sticky;
 		let targetType = mouseEvent.target.type;
 
 		if (this._isMouseDown && this._hoverClicked && this.contentWidget.isColorPickerVisible()) {
@@ -164,7 +169,7 @@ export class ModesHoverController implements IEditorContribution {
 		}
 
 		if (targetType === MouseTargetType.CONTENT_EMPTY) {
-			const epsilon = this._editor.getOption(EditorOption.fontInfo).typicalHalfwidthCharacterWidth / 2;
+			const epsilon = this._editor.getConfiguration().fontInfo.typicalHalfwidthCharacterWidth / 2;
 			const data = <IEmptyContentData>mouseEvent.target.detail;
 			if (data && !data.isAfterLines && typeof data.horizontalDistanceToText === 'number' && data.horizontalDistanceToText < epsilon) {
 				// Let hover kick in even when the mouse is technically in the empty area after a line, given the distance is small enough
@@ -197,16 +202,16 @@ export class ModesHoverController implements IEditorContribution {
 	}
 
 	private _hideWidgets(): void {
-		if (!this._glyphWidget || !this._contentWidget || (this._isMouseDown && this._hoverClicked && this._contentWidget.isColorPickerVisible())) {
+		if (!this._contentWidget || (this._isMouseDown && this._hoverClicked && this._contentWidget.isColorPickerVisible())) {
 			return;
 		}
 
-		this._glyphWidget!.hide();
+		this._glyphWidget.hide();
 		this._contentWidget.hide();
 	}
 
-	private _createHoverWidgets() {
-		this._contentWidget = new ModesContentHoverWidget(this._editor, this._markerDecorationsService, this._themeService, this._keybindingService, this._modeService, this._openerService);
+	private _createHoverWidget() {
+		this._contentWidget = new ModesContentHoverWidget(this._editor, this._markerDecorationsService, this._themeService, this._keybindingService, this._contextMenuService, this._bulkEditService, this._commandService, this._modeService, this._openerService);
 		this._glyphWidget = new ModesGlyphHoverWidget(this._editor, this._modeService, this._openerService);
 	}
 
@@ -264,7 +269,7 @@ class ShowHoverAction extends EditorAction {
 		}
 		const position = editor.getPosition();
 		const range = new Range(position.lineNumber, position.column, position.lineNumber, position.column);
-		const focus = editor.getOption(EditorOption.accessibilitySupport) === AccessibilitySupport.Enabled;
+		const focus = editor.getConfiguration().accessibilitySupport === AccessibilitySupport.Enabled;
 		controller.showContentHover(range, HoverStartMode.Immediate, focus);
 	}
 }

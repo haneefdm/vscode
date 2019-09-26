@@ -17,8 +17,8 @@ import { TokenizationResult, TokenizationResult2 } from 'vs/editor/common/core/t
 import * as model from 'vs/editor/common/model';
 import { LanguageFeatureRegistry } from 'vs/editor/common/modes/languageFeatureRegistry';
 import { TokenizationRegistryImpl } from 'vs/editor/common/modes/tokenizationRegistry';
-import { ExtensionIdentifier } from 'vs/platform/extensions/common/extensions';
 import { IMarkerData } from 'vs/platform/markers/common/markers';
+import { ExtensionIdentifier } from 'vs/platform/extensions/common/extensions';
 
 /**
  * Open ended enum at runtime
@@ -367,10 +367,6 @@ export let completionKindFromString: {
 	};
 })();
 
-export const enum CompletionItemTag {
-	Deprecated = 1
-}
-
 export const enum CompletionItemInsertTextRule {
 	/**
 	 * Adjust whitespace/indentation of multiline insert texts to
@@ -400,11 +396,6 @@ export interface CompletionItem {
 	 * an icon is chosen by the editor.
 	 */
 	kind: CompletionItemKind;
-	/**
-	 * A modifier to the `kind` which affect how the item
-	 * is rendered, e.g. Deprecated is rendered with a strikeout
-	 */
-	tags?: ReadonlyArray<CompletionItemTag>;
 	/**
 	 * A human-readable string with additional information
 	 * about this item, like type or symbol information.
@@ -473,7 +464,7 @@ export interface CompletionItem {
 	/**
 	 * @internal
 	 */
-	_id?: [number, number];
+	[key: string]: any;
 }
 
 export interface CompletionList {
@@ -867,9 +858,6 @@ export const enum SymbolKind {
 	TypeParameter = 25
 }
 
-export const enum SymbolTag {
-	Deprecated = 1,
-}
 
 /**
  * @internal
@@ -913,7 +901,6 @@ export interface DocumentSymbol {
 	name: string;
 	detail: string;
 	kind: SymbolKind;
-	tags: ReadonlyArray<SymbolTag>;
 	containerName?: string;
 	range: IRange;
 	selectionRange: IRange;
@@ -1254,7 +1241,19 @@ export interface CommentThreadTemplate {
 export interface CommentInfo {
 	extensionId?: string;
 	threads: CommentThread[];
-	commentingRanges: CommentingRanges;
+	commentingRanges?: (IRange[] | CommentingRanges);
+	reply?: Command;
+	draftMode?: DraftMode;
+	template?: CommentThreadTemplate;
+}
+
+/**
+ * @internal
+ */
+export enum DraftMode {
+	NotSupported,
+	InDraft,
+	NotInDraft
 }
 
 /**
@@ -1294,22 +1293,27 @@ export interface CommentInput {
 /**
  * @internal
  */
-export interface CommentThread {
+export interface CommentThread2 {
 	commentThreadHandle: number;
 	controllerHandle: number;
 	extensionId?: string;
-	threadId: string;
+	threadId: string | null;
 	resource: string | null;
 	range: IRange;
-	label: string | undefined;
+	label: string;
 	contextValue: string | undefined;
 	comments: Comment[] | undefined;
 	onDidChangeComments: Event<Comment[] | undefined>;
 	collapsibleState?: CommentThreadCollapsibleState;
 	input?: CommentInput;
 	onDidChangeInput: Event<CommentInput | undefined>;
+	acceptInputCommand?: Command;
+	additionalCommands?: Command[];
+	deleteCommand?: Command;
+	onDidChangeAcceptInputCommand: Event<Command | undefined>;
+	onDidChangeAdditionalCommands: Event<Command[] | undefined>;
 	onDidChangeRange: Event<IRange>;
-	onDidChangeLabel: Event<string | undefined>;
+	onDidChangeLabel: Event<string>;
 	onDidChangeCollasibleState: Event<CommentThreadCollapsibleState | undefined>;
 	isDisposed: boolean;
 }
@@ -1321,6 +1325,30 @@ export interface CommentThread {
 export interface CommentingRanges {
 	readonly resource: URI;
 	ranges: IRange[];
+	newCommentThreadCallback?: (uri: UriComponents, range: IRange) => Promise<CommentThread | undefined>;
+}
+
+/**
+ * @internal
+ */
+export interface CommentThread {
+	extensionId?: string;
+	threadId: string | null;
+	resource: string | null;
+	range: IRange;
+	comments: Comment[] | undefined;
+	collapsibleState?: CommentThreadCollapsibleState;
+	reply?: Command;
+	isDisposed?: boolean;
+	contextValue?: string;
+}
+
+/**
+ * @internal
+ */
+export interface NewCommentAction {
+	ranges: IRange[];
+	actions: Command[];
 }
 
 /**
@@ -1346,11 +1374,18 @@ export enum CommentMode {
  * @internal
  */
 export interface Comment {
-	readonly uniqueIdInThread: number;
+	readonly commentId: string;
+	readonly uniqueIdInThread?: number;
 	readonly body: IMarkdownString;
 	readonly userName: string;
 	readonly userIconPath?: string;
 	readonly contextValue?: string;
+	readonly canEdit?: boolean;
+	readonly canDelete?: boolean;
+	readonly selectCommand?: Command;
+	readonly editCommand?: Command;
+	readonly deleteCommand?: Command;
+	readonly isDraft?: boolean;
 	readonly commentReactions?: CommentReaction[];
 	readonly label?: string;
 	readonly mode?: CommentMode;
@@ -1363,17 +1398,54 @@ export interface CommentThreadChangedEvent {
 	/**
 	 * Added comment threads.
 	 */
-	readonly added: CommentThread[];
+	readonly added: (CommentThread | CommentThread2)[];
 
 	/**
 	 * Removed comment threads.
 	 */
-	readonly removed: CommentThread[];
+	readonly removed: (CommentThread | CommentThread2)[];
 
 	/**
 	 * Changed comment threads.
 	 */
-	readonly changed: CommentThread[];
+	readonly changed: (CommentThread | CommentThread2)[];
+
+	/**
+	 * changed draft mode.
+	 */
+	readonly draftMode?: DraftMode;
+}
+
+/**
+ * @internal
+ */
+export interface DocumentCommentProvider {
+	provideDocumentComments(resource: URI, token: CancellationToken): Promise<CommentInfo | null>;
+	createNewCommentThread(resource: URI, range: Range, text: string, token: CancellationToken): Promise<CommentThread | null>;
+	replyToCommentThread(resource: URI, range: Range, thread: CommentThread, text: string, token: CancellationToken): Promise<CommentThread | null>;
+	editComment(resource: URI, comment: Comment, text: string, token: CancellationToken): Promise<void>;
+	deleteComment(resource: URI, comment: Comment, token: CancellationToken): Promise<void>;
+	startDraft?(resource: URI, token: CancellationToken): Promise<void>;
+	deleteDraft?(resource: URI, token: CancellationToken): Promise<void>;
+	finishDraft?(resource: URI, token: CancellationToken): Promise<void>;
+
+	startDraftLabel?: string;
+	deleteDraftLabel?: string;
+	finishDraftLabel?: string;
+
+	addReaction?(resource: URI, comment: Comment, reaction: CommentReaction, token: CancellationToken): Promise<void>;
+	deleteReaction?(resource: URI, comment: Comment, reaction: CommentReaction, token: CancellationToken): Promise<void>;
+	reactionGroup?: CommentReaction[];
+
+	onDidChangeCommentThreads?(): Event<CommentThreadChangedEvent>;
+}
+
+/**
+ * @internal
+ */
+export interface WorkspaceCommentProvider {
+	provideWorkspaceComments(token: CancellationToken): Promise<CommentThread[]>;
+	onDidChangeCommentThreads(): Event<CommentThreadChangedEvent>;
 }
 
 /**
@@ -1400,15 +1472,6 @@ export interface IWebviewOptions {
 export interface IWebviewPanelOptions {
 	readonly enableFindWidget?: boolean;
 	readonly retainContextWhenHidden?: boolean;
-}
-
-/**
- * @internal
- */
-export const enum WebviewEditorState {
-	Readonly = 1,
-	Unchanged = 2,
-	Dirty = 3,
 }
 
 export interface CodeLens {

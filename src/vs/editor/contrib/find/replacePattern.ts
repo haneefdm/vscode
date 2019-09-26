@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { CharCode } from 'vs/base/common/charCode';
-import { buildReplaceStringWithCasePreserved } from 'vs/base/common/search';
 
 const enum ReplacePatternKind {
 	StaticValue = 0,
@@ -49,13 +48,9 @@ export class ReplacePattern {
 		}
 	}
 
-	public buildReplaceString(matches: string[] | null, preserveCase?: boolean): string {
+	public buildReplaceString(matches: string[] | null): string {
 		if (this._state.kind === ReplacePatternKind.StaticValue) {
-			if (preserveCase) {
-				return buildReplaceStringWithCasePreserved(matches, this._state.staticValue);
-			} else {
-				return this._state.staticValue;
-			}
+			return this._state.staticValue;
 		}
 
 		let result = '';

@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as cp from 'child_process';
-import { Application } from '../../../../automation';
+import { Application } from '../../application';
 
 export function setup() {
 	describe('Search', () => {

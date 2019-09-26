@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createDecorator } from 'vs/platform/instantiation/common/instantiation';
+import { createDecorator, ServiceIdentifier } from 'vs/platform/instantiation/common/instantiation';
 import { CancellationToken, CancellationTokenSource } from 'vs/base/common/cancellation';
 import { toDisposable, DisposableStore, Disposable } from 'vs/base/common/lifecycle';
 import { IAction } from 'vs/base/common/actions';
@@ -15,7 +15,7 @@ export const IProgressService = createDecorator<IProgressService>('progressServi
  */
 export interface IProgressService {
 
-	_serviceBrand: undefined;
+	_serviceBrand: ServiceIdentifier<IProgressService>;
 
 	withProgress<R = any>(options: IProgressOptions | IProgressNotificationOptions | IProgressCompositeOptions, task: (progress: IProgress<IProgressStep>) => Promise<R>, onDidCancel?: () => void): Promise<R>;
 }
@@ -50,7 +50,6 @@ export interface IProgressOptions {
 	source?: string;
 	total?: number;
 	cancellable?: boolean;
-	buttons?: string[];
 }
 
 export interface IProgressNotificationOptions extends IProgressOptions {
@@ -91,13 +90,13 @@ export interface IProgress<T> {
 export class Progress<T> implements IProgress<T> {
 
 	private _callback: (data: T) => void;
-	private _value?: T;
+	private _value: T;
 
 	constructor(callback: (data: T) => void) {
 		this._callback = callback;
 	}
 
-	get value(): T | undefined {
+	get value() {
 		return this._value;
 	}
 
@@ -121,7 +120,7 @@ export interface IOperation {
 export class LongRunningOperation extends Disposable {
 	private currentOperationId = 0;
 	private readonly currentOperationDisposables = this._register(new DisposableStore());
-	private currentProgressRunner: IProgressRunner | undefined;
+	private currentProgressRunner: IProgressRunner;
 	private currentProgressTimeout: any;
 
 	constructor(
@@ -174,5 +173,5 @@ export const IEditorProgressService = createDecorator<IEditorProgressService>('e
  */
 export interface IEditorProgressService extends IProgressIndicator {
 
-	_serviceBrand: undefined;
+	_serviceBrand: ServiceIdentifier<IEditorProgressService>;
 }

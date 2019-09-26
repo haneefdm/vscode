@@ -27,13 +27,13 @@ export class StartDebugActionViewItem implements IActionViewItem {
 
 	private static readonly SEPARATOR = '─────────';
 
-	actionRunner!: IActionRunner;
-	private container!: HTMLElement;
-	private start!: HTMLElement;
+	public actionRunner: IActionRunner;
+	private container: HTMLElement;
+	private start: HTMLElement;
 	private selectBox: SelectBox;
-	private options: { label: string, handler?: (() => boolean) }[] = [];
+	private options: { label: string, handler?: (() => boolean) }[];
 	private toDispose: IDisposable[];
-	private selected = 0;
+	private selected: number;
 
 	constructor(
 		private context: any,
@@ -66,7 +66,7 @@ export class StartDebugActionViewItem implements IActionViewItem {
 		}));
 	}
 
-	render(container: HTMLElement): void {
+	public render(container: HTMLElement): void {
 		this.container = container;
 		dom.addClass(container, 'start-debug-action-item');
 		this.start = dom.append(container, $('.icon'));
@@ -129,15 +129,15 @@ export class StartDebugActionViewItem implements IActionViewItem {
 		this.updateOptions();
 	}
 
-	setActionContext(context: any): void {
+	public setActionContext(context: any): void {
 		this.context = context;
 	}
 
-	isEnabled(): boolean {
+	public isEnabled(): boolean {
 		return true;
 	}
 
-	focus(fromRight?: boolean): void {
+	public focus(fromRight?: boolean): void {
 		if (fromRight) {
 			this.selectBox.focus();
 		} else {
@@ -145,11 +145,11 @@ export class StartDebugActionViewItem implements IActionViewItem {
 		}
 	}
 
-	blur(): void {
+	public blur(): void {
 		this.container.blur();
 	}
 
-	dispose(): void {
+	public dispose(): void {
 		this.toDispose = dispose(this.toDispose);
 	}
 
@@ -202,31 +202,25 @@ export class FocusSessionActionViewItem extends SelectActionViewItem {
 		this._register(attachSelectBoxStyler(this.selectBox, themeService));
 
 		this._register(this.debugService.getViewModel().onDidFocusSession(() => {
-			const session = this.getSelectedSession();
+			const session = this.debugService.getViewModel().focusedSession;
 			if (session) {
 				const index = this.getSessions().indexOf(session);
 				this.select(index);
 			}
 		}));
 
-		this._register(this.debugService.onDidNewSession(session => {
-			this._register(session.onDidChangeName(() => this.update()));
-			this.update();
-		}));
-		this.getSessions().forEach(session => {
-			this._register(session.onDidChangeName(() => this.update()));
-		});
+		this._register(this.debugService.onDidNewSession(() => this.update()));
 		this._register(this.debugService.onDidEndSession(() => this.update()));
 
 		this.update();
 	}
 
 	protected getActionContext(_: string, index: number): any {
-		return this.getSessions()[index];
+		return this.debugService.getModel().getSessions()[index];
 	}
 
 	private update() {
-		const session = this.getSelectedSession();
+		const session = this.debugService.getViewModel().focusedSession;
 		const sessions = this.getSessions();
 		const names = sessions.map(s => {
 			const label = s.getLabel();
@@ -240,23 +234,10 @@ export class FocusSessionActionViewItem extends SelectActionViewItem {
 		this.setOptions(names.map(data => <ISelectOptionItem>{ text: data }), session ? sessions.indexOf(session) : undefined);
 	}
 
-	private getSelectedSession(): IDebugSession | undefined {
-		const session = this.debugService.getViewModel().focusedSession;
-		return session ? this.mapFocusedSessionToSelected(session) : undefined;
-	}
-
 	protected getSessions(): ReadonlyArray<IDebugSession> {
 		const showSubSessions = this.configurationService.getValue<IDebugConfiguration>('debug').showSubSessionsInToolBar;
 		const sessions = this.debugService.getModel().getSessions();
 
 		return showSubSessions ? sessions : sessions.filter(s => !s.parentSession);
-	}
-
-	protected mapFocusedSessionToSelected(focusedSession: IDebugSession): IDebugSession {
-		const showSubSessions = this.configurationService.getValue<IDebugConfiguration>('debug').showSubSessionsInToolBar;
-		while (focusedSession.parentSession && !showSubSessions) {
-			focusedSession = focusedSession.parentSession;
-		}
-		return focusedSession;
 	}
 }

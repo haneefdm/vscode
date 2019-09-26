@@ -10,7 +10,7 @@ import { BrowserWindow, ipcMain } from 'electron';
 import { ISharedProcess } from 'vs/platform/windows/electron-main/windows';
 import { Barrier } from 'vs/base/common/async';
 import { ILogService } from 'vs/platform/log/common/log';
-import { ILifecycleMainService } from 'vs/platform/lifecycle/electron-main/lifecycleMainService';
+import { ILifecycleService } from 'vs/platform/lifecycle/electron-main/lifecycleMain';
 import { IThemeMainService } from 'vs/platform/theme/electron-main/themeMainService';
 import { toDisposable, DisposableStore } from 'vs/base/common/lifecycle';
 
@@ -18,13 +18,13 @@ export class SharedProcess implements ISharedProcess {
 
 	private barrier = new Barrier();
 
-	private window: BrowserWindow | null = null;
+	private window: Electron.BrowserWindow | null;
 
 	constructor(
 		private readonly machineId: string,
 		private userEnv: NodeJS.ProcessEnv,
 		@IEnvironmentService private readonly environmentService: IEnvironmentService,
-		@ILifecycleMainService private readonly lifecycleMainService: ILifecycleMainService,
+		@ILifecycleService private readonly lifecycleService: ILifecycleService,
 		@ILogService private readonly logService: ILogService,
 		@IThemeMainService private readonly themeMainService: IThemeMainService
 	) { }
@@ -36,7 +36,7 @@ export class SharedProcess implements ISharedProcess {
 			backgroundColor: this.themeMainService.getBackgroundColor(),
 			webPreferences: {
 				images: false,
-				nodeIntegration: true,
+				webaudio: false,
 				webgl: false,
 				disableBlinkFeatures: 'Auxclick' // do NOT change, allows us to identify this window as shared-process in the process explorer
 			}
@@ -45,8 +45,7 @@ export class SharedProcess implements ISharedProcess {
 			appRoot: this.environmentService.appRoot,
 			machineId: this.machineId,
 			nodeCachedDataDir: this.environmentService.nodeCachedDataDir,
-			userEnv: this.userEnv,
-			windowId: this.window.id
+			userEnv: this.userEnv
 		});
 
 		const url = `${require.toUrl('vs/code/electron-browser/sharedProcess/sharedProcess.html')}?config=${encodeURIComponent(JSON.stringify(config))}`;
@@ -69,7 +68,7 @@ export class SharedProcess implements ISharedProcess {
 
 		const disposables = new DisposableStore();
 
-		this.lifecycleMainService.onWillShutdown(() => {
+		this.lifecycleService.onWillShutdown(() => {
 			disposables.dispose();
 
 			// Shut the shared process down when we are quitting

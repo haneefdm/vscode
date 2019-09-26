@@ -4,12 +4,10 @@
  *--------------------------------------------------------------------------------------------*/
 const VERSION = 1;
 
-const rootPath = self.location.pathname.replace(/\/service-worker.js$/, '');
-
 /**
  * Root path for resources
  */
-const resourceRoot = rootPath + '/vscode-resource';
+const resourceRoot = '/vscode-resource';
 
 const resolveTimeout = 30000;
 
@@ -181,7 +179,7 @@ async function processResourceRequest(event, requestUrl) {
 	}
 
 	const webviewId = getWebviewIdForClient(client);
-	const resourcePath = requestUrl.pathname.startsWith(resourceRoot + '/') ? requestUrl.pathname.slice(resourceRoot.length) :  requestUrl.pathname;
+	const resourcePath = requestUrl.pathname.replace(resourceRoot, '');
 
 	function resolveResourceEntry(entry) {
 		if (!entry) {
@@ -271,6 +269,6 @@ async function getOuterIframeClient(webviewId) {
 	const allClients = await self.clients.matchAll({ includeUncontrolled: true });
 	return allClients.find(client => {
 		const clientUrl = new URL(client.url);
-		return (clientUrl.pathname === `${rootPath}/` || clientUrl.pathname === `${rootPath}/index.html`) && clientUrl.search.match(new RegExp('\\bid=' + webviewId));
+		return clientUrl.pathname === '/' && clientUrl.search.match(new RegExp('\\bid=' + webviewId));
 	});
 }

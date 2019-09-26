@@ -8,4 +8,3 @@ export const sharedLogChannelId = 'sharedLog';
 export const rendererLogChannelId = 'rendererLog';
 export const extHostLogChannelId = 'extHostLog';
 export const telemetryLogChannelId = 'telemetryLog';
-export const userDataSyncLogChannelId = 'userDataSyncLog';

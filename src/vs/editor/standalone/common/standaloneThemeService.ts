@@ -26,7 +26,7 @@ export interface IStandaloneTheme extends ITheme {
 }
 
 export interface IStandaloneThemeService extends IThemeService {
-	_serviceBrand: undefined;
+	_serviceBrand: any;
 
 	setTheme(themeName: string): string;
 
